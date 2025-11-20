@@ -1,4 +1,5 @@
 #!/bin/bash
+echo '[General]' > neshto.creator
 find . -name "*.c" > neshto.files
 find . -name "*.h" >> neshto.files
 echo "Makefile" >> neshto.files
