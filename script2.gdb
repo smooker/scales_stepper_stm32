@@ -7,7 +7,7 @@ monitor traceswo
 stop
 
 #file ./build/modbus.elf 
-load ./build/modbus.hex 
+load build/scales_stepper_malinovski.hex 
 compare-sections
 #hbreak main
 #next
