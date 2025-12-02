@@ -1,1 +1,1 @@
--std=c17
+-std=gnu99 -DSTM32F103x6 -I./Core/Inc/ -I./Drivers/STM32F0xx_HAL_Driver/Inc/

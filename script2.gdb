@@ -6,12 +6,12 @@ attach 1
 monitor traceswo
 stop
 
-#file ./build/modbus.elf 
+##file ./build/modbus.elf 
 load build/scales_stepper_malinovski.hex 
 compare-sections
 #hbreak main
 #next
 #watch huart
 #watch data[0]
-run
+##run
 
