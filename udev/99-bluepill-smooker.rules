@@ -1,0 +1,9 @@
+# Bluepill
+# and run sudo udevadm control -R
+ACTION!="add|change", GOTO="bluepill_rules_end"
+SUBSYSTEM=="tty", ACTION=="add", SYMLINK+="ttyACMTarg"
+SUBSYSTEM=="tty", ACTION=="add", SYMLINK+="ttyACMTarg%E{ID_SERIAL_SHORT}"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="5740", MODE="0666", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="5740", MODE="0666", GROUP="plugdev", TAG+="uaccess"
+LABEL="bluepill_rules_end"
+

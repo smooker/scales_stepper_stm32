@@ -37,7 +37,8 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-
+uint8_t cdcprintf(const char *format, ... );
+uint8_t CDCReceiveChar(uint8_t* inchar);
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
