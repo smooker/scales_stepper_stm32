@@ -13,5 +13,5 @@ compare-sections
 #next
 #watch huart
 #watch data[0]
-##run
+run
 

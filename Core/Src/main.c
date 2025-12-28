@@ -72,7 +72,7 @@ static void MX_TIM2_Init(void);
 
 uint8_t cdcprintf(const char *format, ... )
 {
-    signed int result;
+    uint8_t result = USBD_FAIL;
 
     va_list ap;
 
@@ -81,7 +81,11 @@ uint8_t cdcprintf(const char *format, ... )
     va_start(ap, format);
         result = vsprintf(buffx, format, ap);
     va_end(ap);
-    return CDC_Transmit_FS(buffx, (uint16_t)strlen((const char*)buffx)); //
+    //here smooker USBD_OK, BUSY, FAIL
+    while (result != USBD_OK) {
+        result = CDC_Transmit_FS(buffx, (uint16_t)strlen((const char*)buffx));
+    }
+    return result; //
 }
 
 /* USER CODE END PFP */
@@ -135,14 +139,14 @@ int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
 
 uint8_t CDCReceiveChar(uint8_t* inchar)
 {
-    // cdcprintf("SC:%d:%d\r\n",  *inchar, cmdindex);   //debug only
+    cdcprintf("SC:%d:%d\r\n",  *inchar, cmdindex);   //debug only
     //end of command
     if (*inchar == 13) {
        cmdindex = 0;
        cdcprintf("CMD:%s\r", cmd);
        //command processing here
        if (strstr(cmd, "proba") != NULL) {
-           cdcprintf("RES:PROBATA USPESHNA :)\r");
+           cdcprintf("RES:PROBATA USPESHNA :)\r\n");
        }
        memset(cmd, 0, sizeof(cmd));
        return 1;
@@ -150,7 +154,7 @@ uint8_t CDCReceiveChar(uint8_t* inchar)
     //long commands
     if (cmdindex >= 15) {
         cmdindex = 0;
-        cdcprintf("ERR LENGTH\r", cmd);
+        cdcprintf("ERR LENGTH\r\n", cmd);
         memset(cmd, 0, sizeof(cmd));
         return 0;
     }
@@ -199,6 +203,7 @@ int main(void)
   //boot pritnf
   memset(cmd, 0, sizeof(cmd));
   cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n", debugonly++);
+  cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n", debugonly++);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -217,7 +222,7 @@ int main(void)
     // HAL_Delay(200);
 
     // BKPT;
-    // cdcprintf("CNT: %05d\r", debugonly++);
+    cdcprintf("CNT: %05d\r\n", debugonly++);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
