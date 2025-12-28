@@ -55,3 +55,8 @@ BIN: 101011101000000
 
 
 
+
+https://github.com/STMicroelectronics/STM32CubeF3/blob/master/Projects/STM32373C_EVAL/Applications/EEPROM/EEPROM_Emulation/Src/eeprom.c
+
+
+
