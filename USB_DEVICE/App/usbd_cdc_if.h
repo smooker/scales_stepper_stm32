@@ -48,8 +48,8 @@
   * @{
   */
 /* Define size for the receive and transmit buffer over CDC */
-#define APP_RX_DATA_SIZE  16        //here smooker
-#define APP_TX_DATA_SIZE  16        //adn here smooker. fix data size later
+#define APP_RX_DATA_SIZE  64        //here smooker
+#define APP_TX_DATA_SIZE  64        //adn here smooker. fix data size later
 /* USER CODE BEGIN EXPORTED_DEFINES */
 
 /* USER CODE END EXPORTED_DEFINES */

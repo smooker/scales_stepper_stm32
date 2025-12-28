@@ -59,8 +59,10 @@ TIM_HandleTypeDef htim2;
 
 uint16_t totinpulse = 0;            //total time in pulse (period)
 uint16_t debugonly = 0;            //total time in pulse (period)
-uint8_t cmd[16];               //buffer for command
 uint8_t cmdindex = 0;
+uint8_t *cmd = &UserRxBufferFS[0]+4;
+
+CDCReceiveCharTypes rcs = RX_NOTCPLT;
 
 /* USER CODE END PV */
 
@@ -81,9 +83,12 @@ uint8_t cdcprintf(const char *format, ... )
     va_start(ap, format);
         result = vsprintf(buffx, format, ap);
     va_end(ap);
+    uint8_t len = strlen((const char*)buffx);
     //here smooker USBD_OK, BUSY, FAIL
+    //or usbd_cdc_datain ???
+
     while (result != USBD_OK) {
-        result = CDC_Transmit_FS(buffx, (uint16_t)strlen((const char*)buffx));
+        result = CDC_Transmit_FS(buffx, (uint16_t)len);
     }
     return result; //
 }
@@ -137,29 +142,42 @@ int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
     return 0;
 }
 
-uint8_t CDCReceiveChar(uint8_t* inchar)
+//junk yard
+// cdcprintf("SC:%d:%d\r\n",  *inchar, cmdindex);   //debug only
+// cdcprintf("CMD:%s\r\n", cmd);
+//command processing here
+// if (strstr(cmd, "proba") != NULL) {
+//     // cdcprintf("RES:PROBATA USPESHNA :)\r\n");
+// }
+// cmdindex = 0;
+// cdcprintf("ERR LENGTH\r\n", cmd);
+// memset(cmd, 0, sizeof(cmd));
+// cdcprintf("%s:%d\r\n", cmd, cmdindex);                     //echo full buffer
+
+void CDCReceiveChar(uint8_t* inchar)
 {
-    cdcprintf("SC:%d:%d\r\n",  *inchar, cmdindex);   //debug only
-    //end of command
-    if (*inchar == 13) {
-       cmdindex = 0;
-       cdcprintf("CMD:%s\r", cmd);
-       //command processing here
-       if (strstr(cmd, "proba") != NULL) {
-           cdcprintf("RES:PROBATA USPESHNA :)\r\n");
-       }
-       memset(cmd, 0, sizeof(cmd));
-       return 1;
-    }
-    //long commands
+    //long commands - overflow
     if (cmdindex >= 15) {
         cmdindex = 0;
-        cdcprintf("ERR LENGTH\r\n", cmd);
-        memset(cmd, 0, sizeof(cmd));
-        return 0;
+        rcs = RX_OF;
+        return;
     }
+    //end of command - cr
+    if (*inchar == 13) {
+        cmdindex = 0;
+        rcs = RX_CR;
+        return;
+    }
+
+    //end of command - lf
+    if (*inchar == 10) {
+        cmdindex = 0;
+        rcs = RX_CR;
+        return;
+    }
+
     cmd[cmdindex++] = *inchar;
-    // cdcprintf("%s:%d\r\n", cmd, cmdindex);                     //echo full buffer
+    // UserRxBufferFS[cmdindex] = *inchar;
 }
 
 /* USER CODE END 0 */
@@ -201,7 +219,8 @@ int main(void)
   //USB reenumeration. how to be done. fixme
 
   //boot pritnf
-  memset(cmd, 0, sizeof(cmd));
+  memset(UserRxBufferFS, 0, sizeof(UserRxBufferFS));
+  //
   cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n", debugonly++);
   cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n", debugonly++);
   /* USER CODE END 2 */
@@ -214,6 +233,7 @@ int main(void)
     //migalka za watchdog/main thread
     HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_RESET);
     HAL_Delay(200);
+    // cdcprintf("CNT: %05d:%d:%s:%s\r\n", debugonly++, cmdindex, UserRxBufferFS, cmd);
     HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_SET);
     HAL_Delay(200);
 
@@ -222,7 +242,26 @@ int main(void)
     // HAL_Delay(200);
 
     // BKPT;
-    cdcprintf("CNT: %05d\r\n", debugonly++);
+
+    if (rcs == RX_CR) {
+        if (strcmp(cmd, "proba") == 0) {
+            cdcprintf("RES:PROBATA USPESHNA\r\n");
+        } else if (strcmp(cmd, "test") == 0) {
+            cdcprintf("RES:TEST %s\r\n", cmd);
+        }
+        else {
+            cdcprintf("RES: UNKNOWN COMMAND: %s\r\n", cmd);
+        }
+        memset(UserRxBufferFS, 0, sizeof(UserRxBufferFS));
+    }
+    if (rcs == RX_OF) {
+        cdcprintf("RES: OVERFLOW\r\n");
+        memset(UserRxBufferFS, 0, sizeof(UserRxBufferFS));
+        // }
+    }
+    rcs = RX_NOTCPLT;      //reset status
+
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

@@ -37,8 +37,18 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
+/* rx codes */
+typedef enum
+{
+   RX_CR,           //CR received
+   RX_OF,           //overflow
+   RX_CPLT,         //mark
+   RX_NOTCPLT,      //default
+} CDCReceiveCharTypes;
+
 uint8_t cdcprintf(const char *format, ... );
-uint8_t CDCReceiveChar(uint8_t* inchar);
+void CDCReceiveChar(uint8_t* inchar);
+
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
