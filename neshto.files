@@ -819,3 +819,5 @@
 ./USB_DEVICE/App/usbd_cdc_if.h
 ./USB_DEVICE/Target/usbd_conf.h
 Makefile
+./src/eeprom.h
+./src/eeprom.c
