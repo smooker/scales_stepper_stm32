@@ -25,7 +25,7 @@
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 #include "stdarg.h"
-#include "eeprom.h"
+#include "ee.h"
 
 /* USER CODE END Includes */
 
@@ -50,6 +50,17 @@ TIM_HandleTypeDef htim2;
 /* USER CODE BEGIN PV */
 // GPIO_PinState state = GPIO_PIN_SET;
 // GPIO_PinState prevstate = GPIO_PIN_SET;
+
+typedef struct
+{
+ uint32_t val1;
+ int16_t val2;
+ int8_t val3;
+ float val4;
+
+} stotrage_t;
+
+stotrage_t ee_data;
 
 #define pulsedur    50          //puse duration in us
 #define steps4acc   100         //steps for acceleration
@@ -128,7 +139,6 @@ int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
         if (pulse < steps4acc) {
             delay_us( (steps4acc - pulse) * accmult);   //da se prepravi smetkata s maxvelocity
             //triabva da razgynem ravnomerno ot 50ms do 1ms = d 49ms ama za kolko vreme... ?
-
         }
 
         //max velocity limiter
@@ -225,7 +235,16 @@ int main(void)
   memset(UserRxBufferFS, 0, sizeof(UserRxBufferFS));
   //
   cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n", debugonly++);
-  cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n", debugonly++);
+
+  ee_init(&ee_data, sizeof(stotrage_t));
+  ee_read();
+
+  // ee_data.val1 = 10000;
+
+  cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d : pot: %d\r\n", debugonly++, ee_data.val1);
+  ee_data.val1++;
+  ee_write();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */

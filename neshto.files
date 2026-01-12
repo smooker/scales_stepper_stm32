@@ -824,3 +824,7 @@
 ./USB_DEVICE/App/usbd_cdc_if.h
 ./USB_DEVICE/Target/usbd_conf.h
 Makefile
+./ee/ee.c
+./ee/ee.h
+./ee/ee.c
+./ee/ee_config.h
