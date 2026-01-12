@@ -213,6 +213,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_TIM2_Init();
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
 
@@ -226,10 +227,6 @@ int main(void)
   cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n", debugonly++);
   cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n", debugonly++);
   /* USER CODE END 2 */
-
-  Flash_Program(0, 0x12345678);
-  uint32_t test = Read_Saved_Data();
-  cdcprintf("FLASH READ: %d \r\n", test);       //minus 1 - 0xFFFFFFFF
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
