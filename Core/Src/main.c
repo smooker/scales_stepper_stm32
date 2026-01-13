@@ -22,6 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+//smooker fixme. this can be moved to header file ?
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 #include "stdarg.h"
@@ -57,7 +58,6 @@ typedef struct
  int16_t val2;
  int8_t val3;
  float val4;
-
 } stotrage_t;
 
 stotrage_t ee_data;
@@ -75,6 +75,8 @@ uint8_t cmdindex = 0;
 uint8_t *cmd = &UserRxBufferFS[0]+4;
 
 CDCReceiveCharTypes rcs = RX_NOTCPLT;
+echoTypes rcs2 = RX_ECHO_OFF;
+inputTypes it = RX_NONE;
 
 /* USER CODE END PV */
 
@@ -166,6 +168,8 @@ int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
 // memset(cmd, 0, sizeof(cmd));
 // cdcprintf("%s:%d\r\n", cmd, cmdindex);                     //echo full buffer
 
+
+//receiver
 void CDCReceiveChar(uint8_t* inchar)
 {
     //long commands - overflow
@@ -188,10 +192,49 @@ void CDCReceiveChar(uint8_t* inchar)
         return;
     }
 
+    //echo typing
+    if (rcs2 == RX_ECHO_ON) {
+        cdcprintf("%s", inchar);
+    }
+
     cmd[cmdindex++] = *inchar;
     // UserRxBufferFS[cmdindex] = *inchar;
 }
+void dumpVars()
+{
+    // uint32_t val1;
+    // int16_t val2;
+    // int8_t val3;
+    // float val4;
+    cdcprintf("----------------------\r\n");
+    cdcprintf("Dump of NVARS\r\n");
+    cdcprintf("----------------------\r\n");
+    cdcprintf("var1: %d\r\n", ee_data.val1);
+    cdcprintf("var2: %d\r\n", ee_data.val2);
+    cdcprintf("var3: %d\r\n", ee_data.val3);
+    cdcprintf("var4: %d\r\n", ee_data.val4);
+    cdcprintf("----------------------\r\n");
+}
 
+void help()
+{
+    cdcprintf("\r\n----------------------\r\n");
+    cdcprintf("HELP with commands\r\n");
+    cdcprintf("----------------------\r\n");
+    cdcprintf("reset    : resets the system\r\n");
+    cdcprintf("a        : input var1\r\n");
+    cdcprintf("b        : input var2\r\n");
+    cdcprintf("c        : input var3\r\n");
+    cdcprintf("d        : input var4\r\n");
+    cdcprintf("help     : this help\r\n");
+    cdcprintf("dump     : dump variables\r\n");
+    cdcprintf("----------------------\r\n");
+    cdcprintf("STATUSES/RESULTS/MEANINGS\r\n");
+    cdcprintf("----------------------\r\n");
+    cdcprintf("OVERFLOW : input buffer full. input discarded\r\n");
+    cdcprintf("POT      : power up times counter\r\n");
+    cdcprintf("----------------------\r\n");
+}
 /* USER CODE END 0 */
 
 /**
@@ -239,50 +282,86 @@ int main(void)
   ee_init(&ee_data, sizeof(stotrage_t));
   ee_read();
 
-  // ee_data.val1 = 10000;
+  //ee_data.val1 = 10000;
+  ee_data.val2 = 2;
+  ee_data.val3 = 3;
+  ee_data.val4 = 4.987654321;
+  // ee_write();
 
-  cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d : pot: %d\r\n", debugonly++, ee_data.val1);
+  cdcprintf("DBG:%d\tPOT:%d\r\n", debugonly++, ee_data.val1);
   ee_data.val1++;
+  dumpVars();
   ee_write();
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  // HAL_GPIO_WritePin(HX711_CLK_GPIO_Port, HX711_CLK_Pin, GPIO_PIN_RESET);    //CLK low
   while (1)
   {
     //migalka za watchdog/main thread
     HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_RESET);
     HAL_Delay(200);
-    // cdcprintf("CNT: %05d:%d:%s:%s\r\n", debugonly++, cmdindex, UserRxBufferFS, cmd);
     HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_SET);
     HAL_Delay(200);
 
     // go(1, 250, 200);
     // delay_us(3);       // 3us lag    BIF FIXME. can not use it this way with usb
-    // HAL_Delay(200);
-
-    // BKPT;
 
     if (rcs == RX_CR) {
-        if (strcmp(cmd, "proba") == 0) {
-            cdcprintf("RES:PROBATA USPESHNA\r\n");
-        } else if (strcmp(cmd, "test") == 0) {
-            cdcprintf("RES:TEST %s\r\n", cmd);
+        //bili sme v rezhim na vyvezhdane
+        if (rcs2 == RX_ECHO_ON) {
+            rcs2 = RX_ECHO_OFF;
+            // cdcprintf(" value: %s\r\n", cmd);
+            //will do something
+            if (it == RX_VAR1) {
+                cdcprintf(" value of var1: %s\r\n", cmd);
+            } else if (it == RX_VAR2) {
+                cdcprintf(" value of var2: %s\r\n", cmd);
+            } else if (it == RX_VAR3) {
+                cdcprintf(" value of var3: %s\r\n", cmd);
+            } else if (it == RX_VAR4) {
+                cdcprintf(" value of var4: %s\r\n", cmd);
+            } else {
+                cdcprintf(" WHAT THE FUCK ?!\r\n", cmd);
+            }
+        } else if (strcmp(cmd, "reset") == 0) {
+            cdcprintf("RES:reset\r\n");
+            NVIC_SystemReset();
+        } else if (strcmp(cmd, "dump") == 0) {
+            cdcprintf("RES:dump %s\r\n", cmd);
+            dumpVars();
+        }else if (strcmp(cmd, "help") == 0) {
+            help();
+        } else if (strcmp(cmd,"a") == 0) {
+            cdcprintf("enter value a:");
+            rcs2 = RX_ECHO_ON;
+            it = RX_VAR1;
+        } else if (strcmp(cmd,"b") == 0) {
+            cdcprintf("enter value b:");
+            rcs2 = RX_ECHO_ON;
+            it = RX_VAR2;
+        } else if (strcmp(cmd,"c") == 0) {
+            cdcprintf("enter value a:");
+            rcs2 = RX_ECHO_ON;
+            it = RX_VAR3;
+        } else if (strcmp(cmd,"d") == 0) {
+            cdcprintf("enter value d:");
+            rcs2 = RX_ECHO_ON;
+            it = RX_VAR4;
         }
         else {
             cdcprintf("RES: UNKNOWN COMMAND: %s\r\n", cmd);
         }
         memset(UserRxBufferFS, 0, sizeof(UserRxBufferFS));
-    }
-    if (rcs == RX_OF) {
-        cdcprintf("RES: OVERFLOW\r\n");
+    } else if (rcs == RX_OF) {
+        cdcprintf("\r\nRES: OVERFLOW.\r\n");    //keep it smaller
+        rcs2 = RX_ECHO_OFF;
+        it = RX_NONE;
         memset(UserRxBufferFS, 0, sizeof(UserRxBufferFS));
-        // }
     }
-    rcs = RX_NOTCPLT;      //reset status
 
+    rcs = RX_NOTCPLT;      //reset status
 
     /* USER CODE END WHILE */
 

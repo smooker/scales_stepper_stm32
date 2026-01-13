@@ -32,7 +32,6 @@ extern "C" {
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
-#include "eeprom.h"
 
 /* USER CODE END Includes */
 
@@ -46,6 +45,21 @@ typedef enum
    RX_CPLT,         //mark
    RX_NOTCPLT,      //default
 } CDCReceiveCharTypes;
+
+typedef enum
+{
+   RX_ECHO_ON,      //echo chars. rcs2 semaphore
+   RX_ECHO_OFF,     //do not echo chars. rcs2 semaphore
+} echoTypes;
+
+typedef enum
+{
+   RX_VAR1,      // mode for input var1
+   RX_VAR2,      // mode for input var2
+   RX_VAR3,      // mode for input var3
+   RX_VAR4,      // mode for input var4
+   RX_NONE,      // mode for input var4
+} inputTypes;
 
 uint8_t cdcprintf(const char *format, ... );
 void CDCReceiveChar(uint8_t* inchar);
