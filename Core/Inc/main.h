@@ -94,6 +94,10 @@ void Error_Handler(void);
 #define BUTT_STEPL_GPIO_Port GPIOB
 #define BUTT_STEPR_Pin GPIO_PIN_1
 #define BUTT_STEPR_GPIO_Port GPIOB
+#define ES_R_Pin GPIO_PIN_10
+#define ES_R_GPIO_Port GPIOB
+#define ES_L_Pin GPIO_PIN_11
+#define ES_L_GPIO_Port GPIOB
 #define HX711_DATA_Pin GPIO_PIN_13
 #define HX711_DATA_GPIO_Port GPIOB
 #define HX711_CLK_Pin GPIO_PIN_14

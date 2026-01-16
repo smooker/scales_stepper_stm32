@@ -227,7 +227,9 @@ void dumpIO()
     cdcprintf("JOGL (PA6)  : %d\r\n", HAL_GPIO_ReadPin(BUTT_JOGL_GPIO_Port, BUTT_JOGL_Pin));
     cdcprintf("JOGR (PA7)  : %d\r\n", HAL_GPIO_ReadPin(BUTT_JOGR_GPIO_Port, BUTT_JOGR_Pin));
     cdcprintf("STEPL (PB0) : %d\r\n", HAL_GPIO_ReadPin(BUTT_STEPL_GPIO_Port, BUTT_STEPL_Pin));
-    cdcprintf("STEPL (PB0) : %d\r\n", HAL_GPIO_ReadPin(BUTT_STEPR_GPIO_Port, BUTT_STEPR_Pin));
+    cdcprintf("STEPR (PB1) : %d\r\n", HAL_GPIO_ReadPin(BUTT_STEPR_GPIO_Port, BUTT_STEPR_Pin));
+    cdcprintf("ESL  (PB2)  : %d\r\n", HAL_GPIO_ReadPin(ES_L_GPIO_Port, ES_L_Pin));
+    cdcprintf("ESR  (PB10) : %d\r\n", HAL_GPIO_ReadPin(ES_R_GPIO_Port, ES_R_Pin));
     cdcprintf("----------------------\r\n");
 }
 
@@ -517,20 +519,16 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pins : BUTT_JOGL_Pin BUTT_JOGR_Pin */
   GPIO_InitStruct.Pin = BUTT_JOGL_Pin|BUTT_JOGR_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : BUTT_STEPL_Pin BUTT_STEPR_Pin */
-  GPIO_InitStruct.Pin = BUTT_STEPL_Pin|BUTT_STEPR_Pin;
+  /*Configure GPIO pins : BUTT_STEPL_Pin BUTT_STEPR_Pin ES_R_Pin ES_L_Pin
+                           HX711_DATA_Pin */
+  GPIO_InitStruct.Pin = BUTT_STEPL_Pin|BUTT_STEPR_Pin|ES_R_Pin|ES_L_Pin
+                          |HX711_DATA_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : HX711_DATA_Pin */
-  GPIO_InitStruct.Pin = HX711_DATA_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(HX711_DATA_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : HX711_CLK_Pin */
   GPIO_InitStruct.Pin = HX711_CLK_Pin;
