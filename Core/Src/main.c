@@ -57,7 +57,7 @@ typedef struct
  uint32_t val1;
  int16_t val2;
  int8_t val3;
- float val4;
+ uint32_t val4;
 } stotrage_t;
 
 stotrage_t ee_data;
@@ -212,7 +212,22 @@ void dumpVars()
     cdcprintf("var1: %d\r\n", ee_data.val1);
     cdcprintf("var2: %d\r\n", ee_data.val2);
     cdcprintf("var3: %d\r\n", ee_data.val3);
-    cdcprintf("var4: %d\r\n", ee_data.val4);
+    cdcprintf("var4: 0x%x\r\n", ee_data.val4);
+    cdcprintf("----------------------\r\n");
+}
+
+void dumpIO()
+{
+    //GPIO_PinState RESET = 0, 1 SET
+    // HAL_GPIO_ReadPin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
+
+    cdcprintf("----------------------\r\n");
+    cdcprintf("Dump/set of IO\r\n");
+    cdcprintf("----------------------\r\n");
+    cdcprintf("JOGL (PA6)  : %d\r\n", HAL_GPIO_ReadPin(BUTT_JOGL_GPIO_Port, BUTT_JOGL_Pin));
+    cdcprintf("JOGR (PA7)  : %d\r\n", HAL_GPIO_ReadPin(BUTT_JOGR_GPIO_Port, BUTT_JOGR_Pin));
+    cdcprintf("STEPL (PB0) : %d\r\n", HAL_GPIO_ReadPin(BUTT_STEPL_GPIO_Port, BUTT_STEPL_Pin));
+    cdcprintf("STEPL (PB0) : %d\r\n", HAL_GPIO_ReadPin(BUTT_STEPR_GPIO_Port, BUTT_STEPR_Pin));
     cdcprintf("----------------------\r\n");
 }
 
@@ -228,6 +243,7 @@ void help()
     cdcprintf("d        : input var4\r\n");
     cdcprintf("help     : this help\r\n");
     cdcprintf("dump     : dump variables\r\n");
+    cdcprintf("dumpio   : dump IO states\r\n");
     cdcprintf("----------------------\r\n");
     cdcprintf("STATUSES/RESULTS/MEANINGS\r\n");
     cdcprintf("----------------------\r\n");
@@ -285,12 +301,13 @@ int main(void)
   //ee_data.val1 = 10000;
   ee_data.val2 = 2;
   ee_data.val3 = 3;
-  ee_data.val4 = 4.987654321;
+  ee_data.val4 = 0xdeadbeef;
   // ee_write();
 
   cdcprintf("DBG:%d\tPOT:%d\r\n", debugonly++, ee_data.val1);
   ee_data.val1++;
   dumpVars();
+  dumpIO();
   ee_write();
 
   /* USER CODE END 2 */
@@ -331,7 +348,10 @@ int main(void)
         } else if (strcmp(cmd, "dump") == 0) {
             cdcprintf("RES:dump %s\r\n", cmd);
             dumpVars();
-        }else if (strcmp(cmd, "help") == 0) {
+        } else if (strcmp(cmd, "dumpio") == 0) {
+            cdcprintf("RES:dumpio %s\r\n", cmd);
+            dumpIO();
+        } else if (strcmp(cmd, "help") == 0) {
             help();
         } else if (strcmp(cmd,"a") == 0) {
             cdcprintf("enter value a:");
@@ -475,8 +495,8 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_RESET);
@@ -493,6 +513,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_USER_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : BUTT_JOGL_Pin BUTT_JOGR_Pin */
+  GPIO_InitStruct.Pin = BUTT_JOGL_Pin|BUTT_JOGR_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : BUTT_STEPL_Pin BUTT_STEPR_Pin */
+  GPIO_InitStruct.Pin = BUTT_STEPL_Pin|BUTT_STEPR_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : HX711_DATA_Pin */
   GPIO_InitStruct.Pin = HX711_DATA_Pin;

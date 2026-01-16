@@ -86,6 +86,14 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define LED_USER_Pin GPIO_PIN_13
 #define LED_USER_GPIO_Port GPIOC
+#define BUTT_JOGL_Pin GPIO_PIN_6
+#define BUTT_JOGL_GPIO_Port GPIOA
+#define BUTT_JOGR_Pin GPIO_PIN_7
+#define BUTT_JOGR_GPIO_Port GPIOA
+#define BUTT_STEPL_Pin GPIO_PIN_0
+#define BUTT_STEPL_GPIO_Port GPIOB
+#define BUTT_STEPR_Pin GPIO_PIN_1
+#define BUTT_STEPR_GPIO_Port GPIOB
 #define HX711_DATA_Pin GPIO_PIN_13
 #define HX711_DATA_GPIO_Port GPIOB
 #define HX711_CLK_Pin GPIO_PIN_14
