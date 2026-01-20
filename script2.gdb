@@ -9,9 +9,11 @@ stop
 ##file ./build/modbus.elf 
 load build/scales_stepper_stm32.hex 
 compare-sections
+#dump binary memory result.bin 0x0801f800 0x0801ffff
+#x/2048x 0x0801f800
 #hbreak main
 #next
 #watch huart
 #watch data[0]
-run
+#run
 

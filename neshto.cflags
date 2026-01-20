@@ -1,1 +1,1 @@
--std=gnu99 -DSTM32F103x6 -I./Core/Inc/ -I./Drivers/STM32F0xx_HAL_Driver/Inc/ -DUSE_HAL_PCD_REGISTER_CALLBACKS=1
+-std=gnu99 -DSTM32F103x8 -I./Core/Inc/ -I./Drivers/STM32F0xx_HAL_Driver/Inc/ -DUSE_HAL_PCD_REGISTER_CALLBACKS=1

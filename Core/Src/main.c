@@ -26,7 +26,8 @@
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 #include "stdarg.h"
-#include "ee.h"
+#include <inttypes.h>
+#include "eeprom.h"
 
 /* USER CODE END Includes */
 
@@ -54,11 +55,18 @@ TIM_HandleTypeDef htim2;
 
 typedef struct
 {
- uint32_t val1;
- int16_t val2;
- int8_t val3;
- uint32_t val4;
+ uint32_t Vmax;
+ uint32_t Vmin;
+ uint32_t dVdt;
+ uint32_t steps4unit;
+ uint32_t pot;         //power up times
 } stotrage_t;
+
+typedef struct
+{
+ uint16_t lsb;
+ uint16_t msb;
+} addr32_t;
 
 stotrage_t ee_data;
 
@@ -74,9 +82,13 @@ uint16_t debugonly = 0;            //total time in pulse (period)
 uint8_t cmdindex = 0;
 uint8_t *cmd = &UserRxBufferFS[0]+4;
 
+int tmpret;
+
 CDCReceiveCharTypes rcs = RX_NOTCPLT;
 echoTypes rcs2 = RX_ECHO_OFF;
 inputTypes it = RX_NONE;
+
+uint16_t Status;
 
 /* USER CODE END PV */
 
@@ -200,21 +212,7 @@ void CDCReceiveChar(uint8_t* inchar)
     cmd[cmdindex++] = *inchar;
     // UserRxBufferFS[cmdindex] = *inchar;
 }
-void dumpVars()
-{
-    // uint32_t val1;
-    // int16_t val2;
-    // int8_t val3;
-    // float val4;
-    cdcprintf("----------------------\r\n");
-    cdcprintf("Dump of NVARS\r\n");
-    cdcprintf("----------------------\r\n");
-    cdcprintf("var1: %d\r\n", ee_data.val1);
-    cdcprintf("var2: %d\r\n", ee_data.val2);
-    cdcprintf("var3: %d\r\n", ee_data.val3);
-    cdcprintf("var4: 0x%x\r\n", ee_data.val4);
-    cdcprintf("----------------------\r\n");
-}
+
 
 void dumpIO()
 {
@@ -233,16 +231,34 @@ void dumpIO()
     cdcprintf("----------------------\r\n");
 }
 
+void dumpVars()
+{
+    // uint32_t val1;
+    // int16_t val2;
+    // int8_t val3;
+    // float val4;
+    cdcprintf("----------------------\r\n");
+    cdcprintf("Dump of NVARS\r\n");
+    cdcprintf("----------------------\r\n");
+    cdcprintf("Vmax       : %d\r\n", ee_data.Vmax);
+    cdcprintf("Vmin       : %d\r\n", ee_data.Vmin);
+    cdcprintf("dVdt       : %d\r\n", ee_data.dVdt);
+    cdcprintf("steps4unit : %d\r\n", ee_data.steps4unit);
+    cdcprintf("----------------------\r\n");
+}
+
 void help()
 {
     cdcprintf("\r\n----------------------\r\n");
     cdcprintf("HELP with commands\r\n");
     cdcprintf("----------------------\r\n");
     cdcprintf("reset    : resets the system\r\n");
-    cdcprintf("a        : input var1\r\n");
-    cdcprintf("b        : input var2\r\n");
-    cdcprintf("c        : input var3\r\n");
-    cdcprintf("d        : input var4\r\n");
+    cdcprintf("a        : input Vmax\r\n");
+    cdcprintf("b        : input Vmin\r\n");
+    cdcprintf("c        : input dVdt\r\n");
+    cdcprintf("d        : input steps4unit\r\n");
+    cdcprintf("t        : test run in forward\r\n");
+    cdcprintf("T        : test run in reverse\r\n");
     cdcprintf("help     : this help\r\n");
     cdcprintf("dump     : dump variables\r\n");
     cdcprintf("dumpio   : dump IO states\r\n");
@@ -253,6 +269,60 @@ void help()
     cdcprintf("POT      : power up times counter\r\n");
     cdcprintf("----------------------\r\n");
 }
+
+
+uint16_t eewrite32(uint16_t VirtAddress, uint32_t Data) {
+    uint32_t addr32 = VirtAddress*2;
+    uint16_t status = FLASH_COMPLETE;
+
+    uint16_t addrlsb =  addr32 & 0x0000ffff;
+    uint16_t addrmsb =  (addr32 & 0xffff0000) >> 16;
+    cdcprintf("addrlsb: 0x%x\r\n", addrlsb);
+    cdcprintf("addrmsb: 0x%x\r\n", addrmsb);
+
+    uint16_t datalsb =  Data & 0x0000ffff;
+    uint16_t datamsb =  (Data & 0xffff0000) >> 16;
+    cdcprintf("datalsb: 0x%x\r\n", datalsb);
+    cdcprintf("datamsb: 0x%x\r\n", datamsb);
+
+    if (status = EE_WriteVariable(addrlsb, datalsb) != FLASH_COMPLETE ) {
+        cdcprintf("error during writing lsb: 0x%x\r\n", status);
+        return status;
+    }
+    if (status = EE_WriteVariable(addrlsb+1, datamsb) != FLASH_COMPLETE ) {
+        cdcprintf("error during writing msb: 0x%x\r\n", status);
+        return status;
+    }
+    return status;      //not needed but...
+}
+
+//WIP
+uint16_t eeread32(uint16_t VirtAddress, uint32_t* Data) {   //smooker fixme. has to be uint32_t pointer ?!? will not work on bigger than 64kb ram size
+    uint32_t addr32 = VirtAddress*2;
+    uint16_t status = 0x99;     // 0-OK, 1-doesnotexist,0xab-no valid page, 0x99-mine ???
+
+    addr32_t val;      //storage struct for pointer to the uint32_t variable
+
+    uint16_t addrlsb =  addr32 & 0x0000ffff;
+    uint16_t addrmsb =  (addr32 & 0xffff0000) >> 16;
+    // cdcprintf("addrlsb: 0x%x\r\n", addrlsb);
+    // cdcprintf("addrmsb: 0x%x\r\n", addrmsb);
+    // uint16_t EE_ReadVariable(uint16_t VirtAddress, uint16_t* Data)
+
+    if (status = EE_ReadVariable(addrlsb, &val.lsb) != 0 ) {
+        cdcprintf("error during reading lsb: 0x%x\r\n", status);
+        return status;
+    }
+    if (status = EE_ReadVariable(addrlsb+1, &val.msb) != 0 ) {
+        cdcprintf("error during reading msb: 0x%x\r\n", status);
+        return status;
+    }
+
+    *Data = (val.msb << 16) + (val.lsb);
+
+    return status;      //not needed but...
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -297,20 +367,55 @@ int main(void)
   //
   cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n", debugonly++);
 
-  ee_init(&ee_data, sizeof(stotrage_t));
-  ee_read();
+  //
+  Status = HAL_FLASH_Unlock();      //fixme. move the same into ee_init and into ww_writevariable
+  assert_param(Status == HAL_OK);
+  if(Status != HAL_OK) {
+    cdcprintf("HAL_FLASH_Unlock() returned %d\r\n", Status);
+  };
 
-  //ee_data.val1 = 10000;
-  ee_data.val2 = 2;
-  ee_data.val3 = 3;
-  ee_data.val4 = 0xdeadbeef;
+  cdcprintf("EE_Init returned %d\r\n", EE_Init());
+
+  uint16_t stat;
+  if ( (stat = eeread32(1, &ee_data.Vmax)) != 0) {
+    cdcprintf("Vmax read returned 0x%x\r\n", stat);
+  }
+
+  if ( (stat = eeread32(2, &ee_data.Vmin)) != 0) {
+    cdcprintf("Vmin read returned 0x%x\r\n", stat);
+  }
+
+  if ( (stat = eeread32(3, &ee_data.dVdt)) != 0) {
+    cdcprintf("dVdt read returned 0x%x\r\n", stat);
+  }
+
+  if ( (stat = eeread32(4, &ee_data.steps4unit)) != 0) {
+    cdcprintf("steps4unit read returned 0x%x\r\n", stat);
+  }
+
+  // cdcprintf("Vmax read returned 0x%x\r\n", eeread32(1, &ee_data.Vmax));
+  // cdcprintf("Vmin read returned 0x%x\r\n", eeread32(2, &ee_data.Vmin));
+  // cdcprintf("dVdt read returned 0x%x\r\n", eeread32(3, &ee_data.dVdt));
+  // cdcprintf("steps4unit read returned 0x%x\r\n", eeread32(4, &ee_data.steps4unit));
+
+  //
+  // ee_format();
+  // cdcprintf("format of EEPROM complete!\r\n");
+  // cdcprintf("HAL_GetUIDw0()=%lu\r\n", HAL_GetUIDw0());
+  // cdcprintf("HAL_GetUIDw1()=%lu\r\n", HAL_GetUIDw1());
+  // cdcprintf("HAL_GetUIDw2()=%lu\r\n", HAL_GetUIDw2());
+
+  cdcprintf("HAL_GetDEVID=%lu\r\n", HAL_GetDEVID());
+  //For medium-density devices, the device ID is 0x410
+
+  cdcprintf("Flash size=%ukiB\r\n", *(const uint16_t*)FLASHSIZE_BASE);
+
   // ee_write();
 
-  cdcprintf("DBG:%d\tPOT:%d\r\n", debugonly++, ee_data.val1);
-  ee_data.val1++;
+  cdcprintf("DBG:%d\tPOT:%d\r\n", debugonly++, ee_data.pot);
+  ee_data.pot++;
   dumpVars();
   dumpIO();
-  ee_write();
 
   /* USER CODE END 2 */
 
@@ -334,13 +439,33 @@ int main(void)
             // cdcprintf(" value: %s\r\n", cmd);
             //will do something
             if (it == RX_VAR1) {
-                cdcprintf(" value of var1: %s\r\n", cmd);
+                tmpret = sscanf(cmd, "%" SCNd32, &ee_data.Vmax);
+                cdcprintf(" Vmax value : %d\r\n", ee_data.Vmax);
+                cdcprintf("ret  : %d\r\n", tmpret);
+                eewrite32(1, ee_data.Vmax);
+                eeread32(1, &ee_data.Vmax);
+                cdcprintf(" Vmax value : %d\r\n", ee_data.Vmax);
             } else if (it == RX_VAR2) {
-                cdcprintf(" value of var2: %s\r\n", cmd);
+                tmpret = sscanf(cmd, "%" SCNd32, &ee_data.Vmin);
+                cdcprintf(" Vmin value : %d\r\n", ee_data.Vmin);
+                cdcprintf("ret  : %d\r\n", tmpret);
+                eewrite32(2, ee_data.Vmin);
+                eeread32(2, &ee_data.Vmin);
+                cdcprintf(" Vmin value : %d\r\n", ee_data.Vmin);
             } else if (it == RX_VAR3) {
-                cdcprintf(" value of var3: %s\r\n", cmd);
+                tmpret = sscanf(cmd, "%" SCNd32, &ee_data.dVdt);
+                cdcprintf(" dVdt value : %d\r\n", ee_data.dVdt);
+                cdcprintf("ret  : %d\r\n", tmpret);
+                eewrite32(3, ee_data.dVdt);
+                eeread32(3, &ee_data.dVdt);
+                cdcprintf(" dVdt value : %d\r\n", ee_data.dVdt);
             } else if (it == RX_VAR4) {
-                cdcprintf(" value of var4: %s\r\n", cmd);
+                tmpret = sscanf(cmd, "%" SCNd32, &ee_data.steps4unit);
+                cdcprintf(" dVdt value : %d\r\n", ee_data.steps4unit);
+                cdcprintf("ret  : %d\r\n", tmpret);
+                eewrite32(4, ee_data.steps4unit);
+                eeread32(4, &ee_data.steps4unit);
+                cdcprintf(" steps4unit value : %d\r\n", ee_data.steps4unit);
             } else {
                 cdcprintf(" WHAT THE FUCK ?!\r\n", cmd);
             }
@@ -356,19 +481,19 @@ int main(void)
         } else if (strcmp(cmd, "help") == 0) {
             help();
         } else if (strcmp(cmd,"a") == 0) {
-            cdcprintf("enter value a:");
+            cdcprintf("enter value for Vmax:");
             rcs2 = RX_ECHO_ON;
             it = RX_VAR1;
         } else if (strcmp(cmd,"b") == 0) {
-            cdcprintf("enter value b:");
+            cdcprintf("enter value for Vmin:");
             rcs2 = RX_ECHO_ON;
             it = RX_VAR2;
         } else if (strcmp(cmd,"c") == 0) {
-            cdcprintf("enter value a:");
+            cdcprintf("enter value dVdt:");
             rcs2 = RX_ECHO_ON;
             it = RX_VAR3;
         } else if (strcmp(cmd,"d") == 0) {
-            cdcprintf("enter value d:");
+            cdcprintf("enter value steps4unit:");
             rcs2 = RX_ECHO_ON;
             it = RX_VAR4;
         }

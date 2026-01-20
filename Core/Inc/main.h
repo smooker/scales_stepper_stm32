@@ -74,6 +74,7 @@ void CDCReceiveChar(uint8_t* inchar);
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 #define BKPT asm("bkpt 255")
+
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
