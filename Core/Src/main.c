@@ -75,7 +75,7 @@ stotrage_t ee_data;
 #define steps4decc  100         //steps for decceleration
 #define accmult     10          //acceleration multiplier
 #define deccmult    10          //deceleration multiplier
-#define maxvelocity 1000        //minumum period for pulse (Vmax)
+#define maxvelocity 160        //minumum period for pulse (Vmax)
 
 uint16_t totinpulse = 0;            //total time in pulse (period)
 uint16_t debugonly = 0;            //total time in pulse (period)
@@ -97,6 +97,8 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
+
+void readVariables();
 
 uint8_t cdcprintf(const char *format, ... )
 {
@@ -139,6 +141,13 @@ void delay_us(uint16_t us) {
 
 int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
 {
+    if (dir) {
+        HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_RESET);
+    } else {
+        HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_SET);
+    }
+    delay_us(1300);       //3us lag
+
     for (uint32_t pulse = 1; pulse <= steps; pulse++) {
         totinpulse = 0;
         //
@@ -149,20 +158,24 @@ int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
 
         //100us so far.
 
+        uint16_t delay;
+
         //start ramp.
         if (pulse < steps4acc) {
-            delay_us( (steps4acc - pulse) * accmult);   //da se prepravi smetkata s maxvelocity
+            delay = (steps4acc - pulse) * accmult;
+            delay_us( delay );   //da se prepravi smetkata s maxvelocity
             //triabva da razgynem ravnomerno ot 50ms do 1ms = d 49ms ama za kolko vreme... ?
         }
 
         //max velocity limiter
         if ( (pulse <= (steps-steps4decc)) & (pulse >= steps4acc) ) {
-            delay_us(maxvelocity-(2*pulsedur)-3 );            //1000us dopylvane
+            delay_us( delay );            //1000us dopylvane
         }
 
         //stop ramp.
         if (pulse > (steps-steps4decc)) {
-            delay_us( (pulse-steps+steps4decc) * deccmult); //da se prepravi smetkata s maxvelocity
+            delay = (pulse-steps+steps4decc) * deccmult;
+            delay_us( delay ); //da se prepravi smetkata s maxvelocity
         }
     }
     return 0;
@@ -237,8 +250,9 @@ void dumpVars()
     // int16_t val2;
     // int8_t val3;
     // float val4;
+    readVariables();
     cdcprintf("----------------------\r\n");
-    cdcprintf("Dump of NVARS\r\n");
+    cdcprintf("Dump of NVARS in EEPROM\r\n");
     cdcprintf("----------------------\r\n");
     cdcprintf("Vmax       : %d\r\n", ee_data.Vmax);
     cdcprintf("Vmin       : %d\r\n", ee_data.Vmin);
@@ -323,6 +337,25 @@ uint16_t eeread32(uint16_t VirtAddress, uint32_t* Data) {   //smooker fixme. has
     return status;      //not needed but...
 }
 
+void readVariables()
+{
+    uint16_t stat;
+    if ( (stat = eeread32(1, &ee_data.Vmax)) != 0) {
+        cdcprintf("Vmax read returned 0x%x\r\n", stat);
+    }
+
+    if ( (stat = eeread32(2, &ee_data.Vmin)) != 0) {
+        cdcprintf("Vmin read returned 0x%x\r\n", stat);
+    }
+
+    if ( (stat = eeread32(3, &ee_data.dVdt)) != 0) {
+        cdcprintf("dVdt read returned 0x%x\r\n", stat);
+    }
+
+    if ( (stat = eeread32(4, &ee_data.steps4unit)) != 0) {
+        cdcprintf("steps4unit read returned 0x%x\r\n", stat);
+    }
+}
 /* USER CODE END 0 */
 
 /**
@@ -376,22 +409,9 @@ int main(void)
 
   cdcprintf("EE_Init returned %d\r\n", EE_Init());
 
-  uint16_t stat;
-  if ( (stat = eeread32(1, &ee_data.Vmax)) != 0) {
-    cdcprintf("Vmax read returned 0x%x\r\n", stat);
-  }
+  //WIP
 
-  if ( (stat = eeread32(2, &ee_data.Vmin)) != 0) {
-    cdcprintf("Vmin read returned 0x%x\r\n", stat);
-  }
-
-  if ( (stat = eeread32(3, &ee_data.dVdt)) != 0) {
-    cdcprintf("dVdt read returned 0x%x\r\n", stat);
-  }
-
-  if ( (stat = eeread32(4, &ee_data.steps4unit)) != 0) {
-    cdcprintf("steps4unit read returned 0x%x\r\n", stat);
-  }
+  // readVariables();
 
   // cdcprintf("Vmax read returned 0x%x\r\n", eeread32(1, &ee_data.Vmax));
   // cdcprintf("Vmin read returned 0x%x\r\n", eeread32(2, &ee_data.Vmin));
@@ -496,6 +516,12 @@ int main(void)
             cdcprintf("enter value steps4unit:");
             rcs2 = RX_ECHO_ON;
             it = RX_VAR4;
+        } else if (strcmp(cmd,"g") == 0) {
+            cdcprintf("go running!\r\n");
+            go(0, ee_data.steps4unit, 100);
+            go(1, ee_data.steps4unit, 100);
+            delay_us(500);
+            cdcprintf("go stopped!\r\n");
         }
         else {
             cdcprintf("RES: UNKNOWN COMMAND: %s\r\n", cmd);
