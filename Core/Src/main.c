@@ -73,7 +73,7 @@ stotrage_t ee_data;
 #define pulsedur    50          //puse duration in us
 #define steps4acc   100         //steps for acceleration
 #define steps4decc  100         //steps for decceleration
-#define accmult     10          //acceleration multiplier
+#define accmult     2          //acceleration multiplier
 #define deccmult    10          //deceleration multiplier
 #define maxvelocity 160        //minumum period for pulse (Vmax)
 
@@ -83,6 +83,9 @@ uint8_t cmdindex = 0;
 uint8_t *cmd = &UserRxBufferFS[0]+4;
 
 int tmpret;
+
+uint8_t ingo = 0;
+uint8_t incdcprintf = 0;
 
 CDCReceiveCharTypes rcs = RX_NOTCPLT;
 echoTypes rcs2 = RX_ECHO_OFF;
@@ -104,6 +107,12 @@ uint8_t cdcprintf(const char *format, ... )
 {
     uint8_t result = USBD_FAIL;
 
+    if (incdcprintf == 1) {
+        return result;
+    }
+
+    incdcprintf = 1;
+
     va_list ap;
 
     uint8_t buffx[128] = "NOT SET!";
@@ -118,6 +127,7 @@ uint8_t cdcprintf(const char *format, ... )
     while (result != USBD_OK) {
         result = CDC_Transmit_FS(buffx, (uint16_t)len);
     }
+    incdcprintf = 0;
     return result; //
 }
 
@@ -141,6 +151,7 @@ void delay_us(uint16_t us) {
 
 int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
 {
+    ingo = 1;
     if (dir) {
         HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_RESET);
     } else {
@@ -149,6 +160,9 @@ int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
     delay_us(1300);       //3us lag
 
     for (uint32_t pulse = 1; pulse <= steps; pulse++) {
+        if (ingo == 0) {
+            break;
+        }
         totinpulse = 0;
         //
         HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
@@ -162,7 +176,7 @@ int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
 
         //start ramp.
         if (pulse < steps4acc) {
-            delay = (steps4acc - pulse) * accmult;
+            delay = (steps4acc - pulse) * accmult + 1200;
             delay_us( delay );   //da se prepravi smetkata s maxvelocity
             //triabva da razgynem ravnomerno ot 50ms do 1ms = d 49ms ama za kolko vreme... ?
         }
@@ -174,10 +188,11 @@ int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
 
         //stop ramp.
         if (pulse > (steps-steps4decc)) {
-            delay = (pulse-steps+steps4decc) * deccmult;
+            delay = (pulse-steps+steps4decc) * deccmult + 1200;
             delay_us( delay ); //da se prepravi smetkata s maxvelocity
         }
     }
+    ingo = 0;
     return 0;
 }
 
@@ -445,9 +460,9 @@ int main(void)
   {
     //migalka za watchdog/main thread
     HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_RESET);
-    HAL_Delay(200);
+    HAL_Delay(20);
     HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_SET);
-    HAL_Delay(200);
+    HAL_Delay(20);
 
     // go(1, 250, 200);
     // delay_us(3);       // 3us lag    BIF FIXME. can not use it this way with usb
@@ -519,7 +534,7 @@ int main(void)
         } else if (strcmp(cmd,"g") == 0) {
             cdcprintf("go running!\r\n");
             go(0, ee_data.steps4unit, 100);
-            go(1, ee_data.steps4unit, 100);
+            // go(1, ee_data.steps4unit, 100);
             delay_us(500);
             cdcprintf("go stopped!\r\n");
         }
@@ -669,17 +684,21 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : BUTT_JOGL_Pin BUTT_JOGR_Pin */
   GPIO_InitStruct.Pin = BUTT_JOGL_Pin|BUTT_JOGR_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : BUTT_STEPL_Pin BUTT_STEPR_Pin ES_R_Pin ES_L_Pin
-                           HX711_DATA_Pin */
-  GPIO_InitStruct.Pin = BUTT_STEPL_Pin|BUTT_STEPR_Pin|ES_R_Pin|ES_L_Pin
-                          |HX711_DATA_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  /*Configure GPIO pins : BUTT_STEPL_Pin BUTT_STEPR_Pin ES_L_Pin ES_R_Pin */
+  GPIO_InitStruct.Pin = BUTT_STEPL_Pin|BUTT_STEPR_Pin|ES_L_Pin|ES_R_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : HX711_DATA_Pin */
+  GPIO_InitStruct.Pin = HX711_DATA_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(HX711_DATA_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : HX711_CLK_Pin */
   GPIO_InitStruct.Pin = HX711_CLK_Pin;
@@ -695,11 +714,53 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if(GPIO_Pin == GPIO_PIN_6) {           //PA6 BUTT_JOGL
+    // cdcprintf("JL\r\n");              //fixme debug
+  }
+  else if(GPIO_Pin == GPIO_PIN_7) {      //PA7 BUTT_JOGR
+    // cdcprintf("JR\r\n");              //fixme debug
+  }
+  else if(GPIO_Pin == GPIO_PIN_0 & (ingo == 0) & (incdcprintf == 0)) {      //PB0 BUTT_STEPL
+    cdcprintf("SL\r\n");
+    go(0, ee_data.steps4unit, 10);
+  }
+  else if(GPIO_Pin == GPIO_PIN_1 & (ingo == 0) & (incdcprintf == 0)) {      //PB1 BUTT_STEPR
+    cdcprintf("SR\r\n");
+    go(1, ee_data.steps4unit, 10);
+  }
+  else if(GPIO_Pin == GPIO_PIN_10) {      //PB10 ES_L
+    // cdcprintf("EL\r\n");
+    ingo = 0;
+  }
+  else if(GPIO_Pin == GPIO_PIN_11) {      //PB11 ES_R
+    // cdcprintf("ER\r\n");
+    ingo = 0;
+  }
+  else {
+    __NOP();
+  }
+  // delay_us(100);
+}
 
 /* USER CODE END 4 */
 
