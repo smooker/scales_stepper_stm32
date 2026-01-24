@@ -71,9 +71,9 @@ typedef struct
 stotrage_t ee_data;
 
 #define pulsedur    50                  //puse duration in us
-#define steps4acc   100                 //steps for acceleration
-#define steps4decc  100                 //steps for decceleration
-#define accmult     2                   //acceleration multiplier
+#define steps4acc   50                 //steps for acceleration
+#define steps4decc  50                 //steps for decceleration
+#define accmult     1                   //acceleration multiplier
 #define deccmult    10                  //deceleration multiplier
 #define maxvelocity 160                 //minumum period for pulse (Vmax)
 
@@ -92,6 +92,7 @@ echoTypes rcs2 = RX_ECHO_OFF;           //
 inputTypes it = RX_NONE;                //
 
 uint16_t Status;                        // used in hal_unlock
+uint16_t delay;                         //fixme. global for speed adjust during jog
 
 // define bitwises for semaphore
 #define JOGL 0
@@ -221,7 +222,8 @@ int goStep(uint8_t dir, uint32_t steps, int speed)  //speed in hz
     return 0;
 }
 
-int goJog(uint8_t dir, uint32_t steps, int speed)
+//
+int goJogRampUp(uint8_t dir)
 {
     if (ingo > 0) {
         return 5;            //we are called twice
@@ -236,7 +238,7 @@ int goJog(uint8_t dir, uint32_t steps, int speed)
     }
     delay_us(1300);       //lag minimum - to be variable from V min
 
-    for (uint32_t pulse = 1; pulse <= steps; pulse++) {
+    for (uint32_t pulse = 1; pulse <= steps4acc; pulse++) {
         if (ingo == 0) {
             break;
         }
@@ -247,19 +249,63 @@ int goJog(uint8_t dir, uint32_t steps, int speed)
         HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
         delay_us(pulsedur-3);       //3us lag
 
-        uint16_t delay;
-
         //start ramp.
         if (pulse < steps4acc) {
             delay = (steps4acc - pulse) * accmult + 1200;
             delay_us( delay );   //da se prepravi smetkata s maxvelocity
-            //triabva da razgynem ravnomerno ot 50ms do 1ms = d 49ms ama za kolko vreme... ?
+        }
+    }
+    ingo = 0;
+    return 0;
+}
+
+//
+int goJogRampDown()
+{
+    if (ingo > 0) {
+        return 5;            //we are called twice
+    }
+
+    ingo = 1;
+    for (uint32_t pulse = 1; pulse <= steps4decc; pulse++) {
+        if (ingo == 0) {        //fixme check semaphore
+            break;
         }
 
-        //max velocity limiter
-        if ( (pulse <= (steps-steps4decc)) & (pulse >= steps4acc) ) {
-            delay_us( delay );            //1000us dopylvane
-        }
+        //
+        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
+        delay_us(pulsedur-3);       // 3us lag
+        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
+        delay_us(pulsedur-3);       //3us lag
+
+        //stop ramp.
+        delay = pulse * deccmult + 1200;
+        delay_us( delay ); //da se prepravi smetkata s maxvelocity
+    }
+    ingo = 0;
+    return 0;
+}
+
+//
+int goJog()
+{
+    if (ingo > 0) {
+        return 5;            //we are called twice
+    }
+
+    ingo = 1;
+
+    while( ( semaphore & ((1 << JOGL) | (1 << JOGR)) ) ) {
+        totinpulse = 0;
+        //
+        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
+        delay_us(pulsedur-3);       // 3us lag
+        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
+        delay_us(pulsedur-3);       //3us lag
+
+        delay = 1200;
+
+        delay_us( delay );            //1000us dopylvane
     }
     ingo = 0;
     return 0;
@@ -514,9 +560,9 @@ int main(void)
   {
     //migalka za watchdog/main thread
     HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_RESET);
-    HAL_Delay(10);      //ms
+    // HAL_Delay(200);      //ms
     HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_SET);
-    HAL_Delay(10);      //ms
+    // HAL_Delay(200);      //ms
 
     //MOVEMENT COMMANDS
 
@@ -555,9 +601,11 @@ int main(void)
     if ( (semaphore & (1 << JOGL)) && ((semaphore & (1 << EL)) == 0) ) {
             cdcprintf("JOGL\r\n");
             printSemaphore();
+            goJogRampUp(0);
             while ( semaphore & (1 << JOGL) ) {
-                goJog(0, 10, 100);              //jog speed
+                goJog();              //jog speed
             }
+            goJogRampDown();
             semaphore &= ~(1 << JOGL);      //not needed
     }
 
@@ -565,9 +613,11 @@ int main(void)
     if ( (semaphore & (1 << JOGR)) && ((semaphore & (1 << ER)) == 0) ) {
             cdcprintf("JOGR\r\n");
             printSemaphore();
+            goJogRampUp(1);
             while ( semaphore & (1 << JOGR) ) {
-                goJog(1, 10, 100);              //jog speed
+                goJog();              //jog speed
             }
+            goJogRampDown();
             semaphore &= ~(1 << JOGR);      //not needed
     }
 
@@ -942,13 +992,15 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   if(GPIO_Pin == GPIO_PIN_10) {         //PB10 ES_L
     cdcprintf("EL\r\n");
     semaphore |= (1 << EL);
-    ingo = 0;
+    semaphore &= ~( (1 << JOGL) | (1 << JOGR) | (1 << STEPL) | (1 << STEPR));
+    ingo = 0;           //fixme
   }
 
   //
   if(GPIO_Pin == GPIO_PIN_11) {         //PB11 ES_R
     cdcprintf("ER\r\n");
     semaphore |= (1 << ER);
+    semaphore &= ~( (1 << JOGL) | (1 << JOGR) | (1 << STEPL) | (1 << STEPR));
     ingo = 0;
   }
 }
@@ -959,10 +1011,10 @@ void User_TIMPeriodElapsedCallback()
   //JOG LEFT
   if ( semaphore & (1 << JOGL) ) {            // we are expecting to get the state of ....
     if (HAL_GPIO_ReadPin(BUTT_JOGL_GPIO_Port, BUTT_JOGL_Pin) == GPIO_PIN_RESET) {
-        cdcprintf("JLT0\r\n");
+        // cdcprintf("JLT0\r\n");
     }
     if (HAL_GPIO_ReadPin(BUTT_JOGL_GPIO_Port, BUTT_JOGL_Pin) == GPIO_PIN_SET) {
-        cdcprintf("JLT1\r\n");
+        // cdcprintf("JLT1\r\n");
         semaphore &= ~(1 << JOGL);
     }
   }
@@ -970,10 +1022,10 @@ void User_TIMPeriodElapsedCallback()
   //JOG RIGHT
   if ( semaphore & (1 << JOGR) ) {            // we are expecting to get the state of ....
     if (HAL_GPIO_ReadPin(BUTT_JOGR_GPIO_Port, BUTT_JOGR_Pin) == GPIO_PIN_RESET) {
-        cdcprintf("JRT0\r\n");
+        // cdcprintf("JRT0\r\n");
     }
     if (HAL_GPIO_ReadPin(BUTT_JOGR_GPIO_Port, BUTT_JOGR_Pin) == GPIO_PIN_SET) {
-        cdcprintf("JRT1\r\n");
+        // cdcprintf("JRT1\r\n");
         semaphore &= ~(1 << JOGR);
     }
   }
