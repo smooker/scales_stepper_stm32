@@ -22,7 +22,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-//smooker fixme. this can be moved to header file ?
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 #include "stdarg.h"
@@ -48,11 +47,11 @@
 
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
-// GPIO_PinState state = GPIO_PIN_SET;
-// GPIO_PinState prevstate = GPIO_PIN_SET;
 
+//
 typedef struct
 {
  uint32_t Vmax;
@@ -62,6 +61,7 @@ typedef struct
  uint32_t pot;         //power up times
 } stotrage_t;
 
+//
 typedef struct
 {
  uint16_t lsb;
@@ -70,28 +70,37 @@ typedef struct
 
 stotrage_t ee_data;
 
-#define pulsedur    50          //puse duration in us
-#define steps4acc   100         //steps for acceleration
-#define steps4decc  100         //steps for decceleration
-#define accmult     2          //acceleration multiplier
-#define deccmult    10          //deceleration multiplier
-#define maxvelocity 160        //minumum period for pulse (Vmax)
+#define pulsedur    50                  //puse duration in us
+#define steps4acc   100                 //steps for acceleration
+#define steps4decc  100                 //steps for decceleration
+#define accmult     2                   //acceleration multiplier
+#define deccmult    10                  //deceleration multiplier
+#define maxvelocity 160                 //minumum period for pulse (Vmax)
 
-uint16_t totinpulse = 0;            //total time in pulse (period)
-uint16_t debugonly = 0;            //total time in pulse (period)
+uint16_t totinpulse = 0;                //total time in pulse (period). to be used later.. maybe used in delay_us
 uint8_t cmdindex = 0;
-uint8_t *cmd = &UserRxBufferFS[0]+4;
+uint8_t *cmd = &UserRxBufferFS[0]+4;    //
 
-int tmpret;
+int tmpret;                             //
 
-uint8_t ingo = 0;
-uint8_t incdcprintf = 0;
+uint8_t ingo = 0;                       //
+uint8_t incdcprintf = 0;                //
 
-CDCReceiveCharTypes rcs = RX_NOTCPLT;
-echoTypes rcs2 = RX_ECHO_OFF;
-inputTypes it = RX_NONE;
+CDCReceiveCharTypes rcs = RX_NOTCPLT;   //
+echoTypes rcs2 = RX_ECHO_OFF;           //
+inputTypes it = RX_NONE;                //
 
-uint16_t Status;
+uint16_t Status;                        // used in hal_unlock
+
+// define bitwises for semaphore
+#define JOGL 0
+#define JOGR 1
+#define STEPL 2
+#define STEPR 3
+#define EL 4
+#define ER 5
+#define GO 6
+uint32_t semaphore = 0;
 
 /* USER CODE END PV */
 
@@ -99,10 +108,19 @@ uint16_t Status;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
+//
 void readVariables();
 
+//
+void printSemaphore()
+{
+ cdcprintf("SEM: %x\r\n", semaphore);
+}
+
+//
 uint8_t cdcprintf(const char *format, ... )
 {
     uint8_t result = USBD_FAIL;
@@ -131,7 +149,6 @@ uint8_t cdcprintf(const char *format, ... )
     return result; //
 }
 
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -149,15 +166,21 @@ void delay_us(uint16_t us) {
     HAL_TIM_Base_Stop(&htim2);
 }
 
-int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
+//
+int goStep(uint8_t dir, uint32_t steps, int speed)  //speed in hz
 {
+    if (ingo > 0) {
+        return 5;            //we are called twice
+    }
+
     ingo = 1;
+
     if (dir) {
         HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_RESET);
     } else {
         HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_SET);
     }
-    delay_us(1300);       //3us lag
+    delay_us(1300);       //lag minimum - to be variable from V min
 
     for (uint32_t pulse = 1; pulse <= steps; pulse++) {
         if (ingo == 0) {
@@ -169,8 +192,6 @@ int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
         delay_us(pulsedur-3);       // 3us lag
         HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
         delay_us(pulsedur-3);       //3us lag
-
-        //100us so far.
 
         uint16_t delay;
 
@@ -195,19 +216,6 @@ int go(uint8_t dir, uint32_t steps, int speed)  //speed in hz
     ingo = 0;
     return 0;
 }
-
-//junk yard
-// cdcprintf("SC:%d:%d\r\n",  *inchar, cmdindex);   //debug only
-// cdcprintf("CMD:%s\r\n", cmd);
-//command processing here
-// if (strstr(cmd, "proba") != NULL) {
-//     // cdcprintf("RES:PROBATA USPESHNA :)\r\n");
-// }
-// cmdindex = 0;
-// cdcprintf("ERR LENGTH\r\n", cmd);
-// memset(cmd, 0, sizeof(cmd));
-// cdcprintf("%s:%d\r\n", cmd, cmdindex);                     //echo full buffer
-
 
 //receiver
 void CDCReceiveChar(uint8_t* inchar)
@@ -241,7 +249,7 @@ void CDCReceiveChar(uint8_t* inchar)
     // UserRxBufferFS[cmdindex] = *inchar;
 }
 
-
+//
 void dumpIO()
 {
     //GPIO_PinState RESET = 0, 1 SET
@@ -259,6 +267,7 @@ void dumpIO()
     cdcprintf("----------------------\r\n");
 }
 
+//
 void dumpVars()
 {
     // uint32_t val1;
@@ -276,6 +285,7 @@ void dumpVars()
     cdcprintf("----------------------\r\n");
 }
 
+//
 void help()
 {
     cdcprintf("\r\n----------------------\r\n");
@@ -299,7 +309,7 @@ void help()
     cdcprintf("----------------------\r\n");
 }
 
-
+//
 uint16_t eewrite32(uint16_t VirtAddress, uint32_t Data) {
     uint32_t addr32 = VirtAddress*2;
     uint16_t status = FLASH_COMPLETE;
@@ -325,8 +335,9 @@ uint16_t eewrite32(uint16_t VirtAddress, uint32_t Data) {
     return status;      //not needed but...
 }
 
-//WIP
+//
 uint16_t eeread32(uint16_t VirtAddress, uint32_t* Data) {   //smooker fixme. has to be uint32_t pointer ?!? will not work on bigger than 64kb ram size
+
     uint32_t addr32 = VirtAddress*2;
     uint16_t status = 0x99;     // 0-OK, 1-doesnotexist,0xab-no valid page, 0x99-mine ???
 
@@ -352,6 +363,7 @@ uint16_t eeread32(uint16_t VirtAddress, uint32_t* Data) {   //smooker fixme. has
     return status;      //not needed but...
 }
 
+//
 void readVariables()
 {
     uint16_t stat;
@@ -369,6 +381,19 @@ void readVariables()
 
     if ( (stat = eeread32(4, &ee_data.steps4unit)) != 0) {
         cdcprintf("steps4unit read returned 0x%x\r\n", stat);
+    }
+}
+
+//
+void User_TIMPeriodElapsedCallback()
+{
+
+    // HAL_Delay(20);
+    if (HAL_GPIO_ReadPin(LED_USER_GPIO_Port, LED_USER_Pin) == 1) {
+        HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_RESET);
+    }
+    if (HAL_GPIO_ReadPin(LED_USER_GPIO_Port, LED_USER_Pin) == 0) {
+        HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_SET);
     }
 }
 /* USER CODE END 0 */
@@ -404,16 +429,21 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM2_Init();
   MX_USB_DEVICE_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_TIM_Base_Start(&htim2);
   HAL_Delay(1000);      //wait for USB reenumeration
-  //USB reenumeration. how to be done. fixme
 
   //boot pritnf
   memset(UserRxBufferFS, 0, sizeof(UserRxBufferFS));
+
   //
-  cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n", debugonly++);
+  cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n");
+
+  //
+  HAL_TIM_RegisterCallback(&htim3, HAL_TIM_PERIOD_ELAPSED_CB_ID, User_TIMPeriodElapsedCallback);
+  // HAL_TIM_Base_Start_IT(&htim3);
 
   //
   Status = HAL_FLASH_Unlock();      //fixme. move the same into ee_init and into ww_writevariable
@@ -424,18 +454,6 @@ int main(void)
 
   cdcprintf("EE_Init returned %d\r\n", EE_Init());
 
-  //WIP
-
-  // readVariables();
-
-  // cdcprintf("Vmax read returned 0x%x\r\n", eeread32(1, &ee_data.Vmax));
-  // cdcprintf("Vmin read returned 0x%x\r\n", eeread32(2, &ee_data.Vmin));
-  // cdcprintf("dVdt read returned 0x%x\r\n", eeread32(3, &ee_data.dVdt));
-  // cdcprintf("steps4unit read returned 0x%x\r\n", eeread32(4, &ee_data.steps4unit));
-
-  //
-  // ee_format();
-  // cdcprintf("format of EEPROM complete!\r\n");
   // cdcprintf("HAL_GetUIDw0()=%lu\r\n", HAL_GetUIDw0());
   // cdcprintf("HAL_GetUIDw1()=%lu\r\n", HAL_GetUIDw1());
   // cdcprintf("HAL_GetUIDw2()=%lu\r\n", HAL_GetUIDw2());
@@ -445,10 +463,6 @@ int main(void)
 
   cdcprintf("Flash size=%ukiB\r\n", *(const uint16_t*)FLASHSIZE_BASE);
 
-  // ee_write();
-
-  cdcprintf("DBG:%d\tPOT:%d\r\n", debugonly++, ee_data.pot);
-  ee_data.pot++;
   dumpVars();
   dumpIO();
 
@@ -460,19 +474,47 @@ int main(void)
   {
     //migalka za watchdog/main thread
     HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_RESET);
-    HAL_Delay(20);
+    HAL_Delay(20);      //ms
     HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_SET);
-    HAL_Delay(20);
+    HAL_Delay(20);      //ms
 
-    // go(1, 250, 200);
-    // delay_us(3);       // 3us lag    BIF FIXME. can not use it this way with usb
+    //JOGL
+    if ( semaphore & (1 << JOGL) ) {
+            cdcprintf("JOGL\r\n");
+            printSemaphore();
+            goStep(0, 2, 100);              //jog speed
+            semaphore &= ~(1 << JOGL);
+    }
+
+    //JOGR
+    if ( semaphore & (1 << JOGR) ) {
+            cdcprintf("JOGR\r\n");
+            printSemaphore();
+            goStep(1, 2, 100);
+            semaphore &= ~(1 << JOGR);
+    }
+
+    //STEPL
+    if ( semaphore & (1 << STEPL) ) {
+            cdcprintf("STEPL\r\n");
+            printSemaphore();
+            goStep(0, ee_data.steps4unit, 100);     //step speed
+            semaphore &= ~(1 << STEPL);
+    }
+
+    //STEPR
+    if ( semaphore & (1 << STEPR) ) {
+            cdcprintf("STEPR\r\n");
+            printSemaphore();
+            goStep(1, ee_data.steps4unit, 100);     //step speed
+            semaphore &= ~(1 << STEPR);
+    }
 
     if (rcs == RX_CR) {
-        //bili sme v rezhim na vyvezhdane
+        // we were in variable entry mode
         if (rcs2 == RX_ECHO_ON) {
             rcs2 = RX_ECHO_OFF;
-            // cdcprintf(" value: %s\r\n", cmd);
-            //will do something
+            // parse variable values
             if (it == RX_VAR1) {
                 tmpret = sscanf(cmd, "%" SCNd32, &ee_data.Vmax);
                 cdcprintf(" Vmax value : %d\r\n", ee_data.Vmax);
@@ -504,7 +546,9 @@ int main(void)
             } else {
                 cdcprintf(" WHAT THE FUCK ?!\r\n", cmd);
             }
-        } else if (strcmp(cmd, "reset") == 0) {
+        }
+        // parse commands
+        else if (strcmp(cmd, "reset") == 0) {
             cdcprintf("RES:reset\r\n");
             NVIC_SystemReset();
         } else if (strcmp(cmd, "dump") == 0) {
@@ -533,7 +577,7 @@ int main(void)
             it = RX_VAR4;
         } else if (strcmp(cmd,"g") == 0) {
             cdcprintf("go running!\r\n");
-            go(0, ee_data.steps4unit, 100);
+            goStep(0, ee_data.steps4unit, 100);
             // go(1, ee_data.steps4unit, 100);
             delay_us(500);
             cdcprintf("go stopped!\r\n");
@@ -620,7 +664,7 @@ static void MX_TIM2_Init(void)
   TIM_MasterConfigTypeDef sMasterConfig = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
-
+    //1uS perdiod 48Mhz sysclk/48=1Mhz
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 47;
@@ -646,6 +690,51 @@ static void MX_TIM2_Init(void)
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 47999;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 65535;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV4;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
 
 }
 
@@ -715,16 +804,16 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 15, 0);
   HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 15, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -735,25 +824,37 @@ static void MX_GPIO_Init(void)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   if(GPIO_Pin == GPIO_PIN_6) {           //PA6 BUTT_JOGL
-    // cdcprintf("JL\r\n");              //fixme debug
+    cdcprintf("JL\r\n");                 //fixme debug
+    semaphore |= (1 << JOGL);
   }
   else if(GPIO_Pin == GPIO_PIN_7) {      //PA7 BUTT_JOGR
-    // cdcprintf("JR\r\n");              //fixme debug
+    cdcprintf("JR\r\n");                 //fixme debug
+    semaphore |= (1 << JOGR);
   }
-  else if(GPIO_Pin == GPIO_PIN_0 & (ingo == 0) & (incdcprintf == 0)) {      //PB0 BUTT_STEPL
-    cdcprintf("SL\r\n");
-    go(0, ee_data.steps4unit, 10);
+  else if(GPIO_Pin == GPIO_PIN_0 ) {      //PB0 BUTT_STEPL
+    if (HAL_GPIO_ReadPin(BUTT_STEPL_GPIO_Port, BUTT_STEPL_Pin) == 0) {
+        HAL_TIM_Base_Start_IT(&htim3);
+        if ( (ingo == 0) & (incdcprintf == 0) ) {
+            cdcprintf("SL\r\n");
+            semaphore |= (1 << STEPL);
+        }
+    }
   }
-  else if(GPIO_Pin == GPIO_PIN_1 & (ingo == 0) & (incdcprintf == 0)) {      //PB1 BUTT_STEPR
-    cdcprintf("SR\r\n");
-    go(1, ee_data.steps4unit, 10);
+  else if(GPIO_Pin == GPIO_PIN_1 ) {      //PB1 BUTT_STEPR
+    if (HAL_GPIO_ReadPin(BUTT_STEPR_GPIO_Port, BUTT_STEPR_Pin) == 0) {
+        if ( (ingo == 0) & (incdcprintf == 0) ) {
+            cdcprintf("SR\r\n");
+            //go(1, ee_data.steps4unit, 10);
+            semaphore |= (1 << STEPR);
+        }
+    }
   }
   else if(GPIO_Pin == GPIO_PIN_10) {      //PB10 ES_L
-    // cdcprintf("EL\r\n");
+    cdcprintf("EL\r\n");
     ingo = 0;
   }
   else if(GPIO_Pin == GPIO_PIN_11) {      //PB11 ES_R
-    // cdcprintf("ER\r\n");
+    cdcprintf("ER\r\n");
     ingo = 0;
   }
   else {

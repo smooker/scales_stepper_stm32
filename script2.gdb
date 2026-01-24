@@ -8,6 +8,7 @@ stop
 
 ##file ./build/modbus.elf 
 load build/scales_stepper_stm32.hex 
+#set remote exec-file ./build/scales_stepper_stm32.elf
 compare-sections
 #dump binary memory result.bin 0x0801f800 0x0801ffff
 #x/2048x 0x0801f800
