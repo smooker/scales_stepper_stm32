@@ -116,9 +116,12 @@ static void MX_TIM3_Init(void);
 void readVariables();
 
 //
+void User_TIMPeriodElapsedCallback();
+
+//
 void printSemaphore()
 {
- cdcprintf("SEM:%08x: %x\r\n", debugonly, semaphore);
+ // cdcprintf("SEM:%08x: %x\r\n", debugonly, semaphore);
 }
 
 //
@@ -429,18 +432,6 @@ void readVariables()
     }
 }
 
-//
-void User_TIMPeriodElapsedCallback()
-{
-
-    // HAL_Delay(20);
-    if (HAL_GPIO_ReadPin(LED_USER_GPIO_Port, LED_USER_Pin) == 1) {
-        HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_RESET);
-    }
-    if (HAL_GPIO_ReadPin(LED_USER_GPIO_Port, LED_USER_Pin) == 0) {
-        HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_SET);
-    }
-}
 /* USER CODE END 0 */
 
 /**
@@ -488,6 +479,10 @@ int main(void)
 
   //
   HAL_TIM_RegisterCallback(&htim3, HAL_TIM_PERIOD_ELAPSED_CB_ID, User_TIMPeriodElapsedCallback);
+  // __HAL_TIM_CLEAR_IT(&htim3, TIM_IT_UPDATE);
+  // __HAL_TIM_ENABLE_IT(&htim3,TIM_IT_UPDATE);
+  // htim3.Instance->ARR=20;
+  // __HAL_TIM_ENABLE(&htim3);
   // HAL_TIM_Base_Start_IT(&htim3);
 
   //
@@ -519,9 +514,9 @@ int main(void)
   {
     //migalka za watchdog/main thread
     HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_RESET);
-    HAL_Delay(1);      //ms
+    HAL_Delay(10);      //ms
     HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_SET);
-    HAL_Delay(1);      //ms
+    HAL_Delay(10);      //ms
 
     //MOVEMENT COMMANDS
 
@@ -560,16 +555,20 @@ int main(void)
     if ( (semaphore & (1 << JOGL)) && ((semaphore & (1 << EL)) == 0) ) {
             cdcprintf("JOGL\r\n");
             printSemaphore();
-            goJog(0, 10, 100);              //jog speed
-            semaphore &= ~(1 << JOGL);
+            while ( semaphore & (1 << JOGL) ) {
+                goJog(0, 10, 100);              //jog speed
+            }
+            semaphore &= ~(1 << JOGL);      //not needed
     }
 
     //JOGR - buttons to GND, limit switches too
     if ( (semaphore & (1 << JOGR)) && ((semaphore & (1 << ER)) == 0) ) {
             cdcprintf("JOGR\r\n");
             printSemaphore();
-            goJog(1, 10, 100);              //jog speed
-            semaphore &= ~(1 << JOGR);
+            while ( semaphore & (1 << JOGR) ) {
+                goJog(1, 10, 100);              //jog speed
+            }
+            semaphore &= ~(1 << JOGR);      //not needed
     }
 
     //STEPL
@@ -792,8 +791,8 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 47999;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
-  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV4;
+  htim3.Init.Period = 100;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
   {
@@ -804,7 +803,11 @@ static void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  if (HAL_TIM_OnePulse_Init(&htim3, TIM_OPMODE_SINGLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
   {
@@ -851,7 +854,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : BUTT_JOGL_Pin BUTT_JOGR_Pin */
   GPIO_InitStruct.Pin = BUTT_JOGL_Pin|BUTT_JOGR_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
@@ -905,12 +908,22 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   if(GPIO_Pin == GPIO_PIN_6) {           //PA6 BUTT_JOGL
     cdcprintf("JL\r\n");                 //fixme debug
     semaphore |= (1 << JOGL);
+    //
+    __HAL_TIM_CLEAR_IT(&htim3, TIM_IT_UPDATE);
+    htim3.Instance->ARR=20;     // 100 - 20 = 80 ticks
+    __HAL_TIM_ENABLE_IT(&htim3,TIM_IT_UPDATE);
+    __HAL_TIM_ENABLE(&htim3);
   }
 
   //
   if(GPIO_Pin == GPIO_PIN_7) {           //PA7 BUTT_JOGR
     cdcprintf("JR\r\n");                 //fixme debug
     semaphore |= (1 << JOGR);
+    //
+    __HAL_TIM_CLEAR_IT(&htim3, TIM_IT_UPDATE);
+    htim3.Instance->ARR=20;     // 100 - 20 = 80 ticks
+    __HAL_TIM_ENABLE_IT(&htim3,TIM_IT_UPDATE);
+    __HAL_TIM_ENABLE(&htim3);
   }
 
   //
@@ -938,6 +951,33 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     semaphore |= (1 << ER);
     ingo = 0;
   }
+}
+
+// buttons  release handling
+void User_TIMPeriodElapsedCallback()
+{
+  //JOG LEFT
+  if ( semaphore & (1 << JOGL) ) {            // we are expecting to get the state of ....
+    if (HAL_GPIO_ReadPin(BUTT_JOGL_GPIO_Port, BUTT_JOGL_Pin) == GPIO_PIN_RESET) {
+        cdcprintf("JLT0\r\n");
+    }
+    if (HAL_GPIO_ReadPin(BUTT_JOGL_GPIO_Port, BUTT_JOGL_Pin) == GPIO_PIN_SET) {
+        cdcprintf("JLT1\r\n");
+        semaphore &= ~(1 << JOGL);
+    }
+  }
+
+  //JOG RIGHT
+  if ( semaphore & (1 << JOGR) ) {            // we are expecting to get the state of ....
+    if (HAL_GPIO_ReadPin(BUTT_JOGR_GPIO_Port, BUTT_JOGR_Pin) == GPIO_PIN_RESET) {
+        cdcprintf("JRT0\r\n");
+    }
+    if (HAL_GPIO_ReadPin(BUTT_JOGR_GPIO_Port, BUTT_JOGR_Pin) == GPIO_PIN_SET) {
+        cdcprintf("JRT1\r\n");
+        semaphore &= ~(1 << JOGR);
+    }
+  }
+
 }
 
 /* USER CODE END 4 */
