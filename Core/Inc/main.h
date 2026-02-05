@@ -58,7 +58,8 @@ typedef enum
    RX_VAR2,      // mode for input var2
    RX_VAR3,      // mode for input var3
    RX_VAR4,      // mode for input var4
-   RX_NONE,      // mode for input var4
+   RX_VAR5,      // mode for input var5
+   RX_NONE,      // mode for input wtf ?
 } inputTypes;
 
 uint8_t cdcprintf(const char *format, ... );
