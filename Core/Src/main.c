@@ -1027,17 +1027,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : BUTT_STEPL_Pin BUTT_STEPR_Pin ES_L_Pin */
-  GPIO_InitStruct.Pin = BUTT_STEPL_Pin|BUTT_STEPR_Pin|ES_L_Pin;
+  /*Configure GPIO pins : BUTT_STEPL_Pin BUTT_STEPR_Pin */
+  GPIO_InitStruct.Pin = BUTT_STEPL_Pin|BUTT_STEPR_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : ES_R_Pin */
-  GPIO_InitStruct.Pin = ES_R_Pin;
+  /*Configure GPIO pins : ES_L_Pin ES_R_Pin */
+  GPIO_InitStruct.Pin = ES_L_Pin|ES_R_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(ES_R_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : HX711_DATA_Pin */
   GPIO_InitStruct.Pin = HX711_DATA_Pin;
