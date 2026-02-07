@@ -132,7 +132,7 @@ stotrage_t ee_data;
 // end
 #define pulsedur        50                  //puse duration in us
 
-#define steps4acc       100                //steps for acceleration
+// #define steps4acc       100                //steps for acceleration
 #define steps4decc      100                //steps for decceleration
 
 #define accmult         1                   //acceleration multiplier
@@ -229,10 +229,10 @@ uint8_t cdcprintf(const char *format, ... )
 
 
 //reciprocal
-uint16_t reci(uint16_t x) {
-    if (x == 0) return 0xFFFF; // div by 0
-    if (x == 1) return 0xFFFF; // div by 0
-    return (1L << 16) / x;      // 64 bit
+uint32_t reci(uint16_t x) {
+    if (x == 0) return 0xFFFFFFFF; // div by 0
+    // if (x == 1) return 0xFFFFFFFF; // div by 0
+    return 1000000 / x;
 }
 
 // 1MHz = 1us resolution. 3us lag here
@@ -240,6 +240,7 @@ void delay_us(uint16_t us) {
 
     if (us == 0) return;
     TIM2->CNT = 0;
+    TIM2->ARR = 65535;
     __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
 
     HAL_StatusTypeDef stat;
@@ -264,65 +265,86 @@ int goJogStep(uint8_t dir, uint32_t steps, int speed)  //speed in hz           /
     }
     delay_us(1300);                 //delay after DIRECTION setting
 
-    // for (uint32_t pulse = 1; pulse <= steps; pulse++) {
-    while ( (pulse <= steps4acc) & SEM_JOGSTEPL & !SEM_EL ) {
-        //
-        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
-        delay_us(pulsedur-3);       // 3us lag
-        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
-        delay_us(pulsedur-3);       //3us lag
+//     // for (uint32_t pulse = 1; pulse <= steps; pulse++) {
+//     while ( (pulse <= steps4acc) & SEM_JOGSTEPL & !SEM_EL ) {
+//         //
+//         HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
+//         delay_us(pulsedur-3);       // 3us lag
+//         HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
+//         delay_us(pulsedur-3);       //3us lag
 
-        uint16_t delay;
+//         uint16_t delay;
 
-        //start ramp.
-        if (pulse < steps4acc) {
-            delay = (steps4acc - pulse) * accmult + stepspeed;
-            delay_us( delay );
-        }
-        pulse++;
-    }
+//         //start ramp.
+//         if (pulse < steps4acc) {
+//             delay = (steps4acc - pulse) * accmult + stepspeed;
+//             delay_us( delay );
+//         }
+//         pulse++;
+//     }
 
-    return 0;
+//     return 0;
 
-    //max velocity limiter
-    if ( (pulse <= (steps-steps4decc)) & (pulse >= steps4acc) ) {
-        delay_us( delay );
-    }
+//     //max velocity limiter
+//     if ( (pulse <= (steps-steps4decc)) & (pulse >= steps4acc) ) {
+//         delay_us( delay );
+//     }
 
-    //stop ramp.
-    if (pulse > (steps-steps4decc)) {
-        delay = (pulse-steps+steps4decc) * deccmult + stepspeed;
-        delay_us( delay ); //da se prepravi smetkata s maxvelocity
-    }
+//     //stop ramp.
+//     if (pulse > (steps-steps4decc)) {
+//         delay = (pulse-steps+steps4decc) * deccmult + stepspeed;
+//         delay_us( delay ); //da se prepravi smetkata s maxvelocity
+//     }
 
-    return 0;
-}
+     return 0;
+ }
 
 //
-int LJogRampUp()
+int JogRampUp(uint8_t dir, uint32_t steps_in)
 {
-    cdcprintf("in LJogRampUp\r\n");
+    cdcprintf("in JogRampUp dir=%d\r\n", dir);
 
-    // 0 = L, 1 = R GPIO_PIN_SET for L
-    HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_SET);
+     // 0 = L, 1 = R GPIO_PIN_SET for L
+    if (dir == 0) {
+        HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_SET);
+    }
+    if (dir == 1) {
+        HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_RESET);
+    }
+
     delay_us(delayafterdir);       //lag minimum - to be variable from V min
 
-    //
-    pulse = 1;
-    while ( (pulse <= steps4acc) & SEM_JOGL & !SEM_EL ) {
-        //
-        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
-        delay_us(pulsedur-3);       // 3us lag
-        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
-        delay_us(pulsedur-3);       //3us lag
+     uint32_t tmpsps = ee_data.spsmin * 100;
+     int dsps = ee_data.spsmax-ee_data.spsmin;            //
 
-        //
-        delay = (steps4acc - pulse) * accmult + jogspeed;
-        delay_us( delay );   //da se prepravi smetkata s maxvelocity
-        //
-        pulse++;
-    }
-    cdcprintf("out LJogRampUp on pulse=%d\r\n", pulse-1);
+     int time = dsps * 1000 / ee_data.spsps;            // 80000/50 = 1600ms
+
+     delay_us(50);
+
+     cdcprintf("into JogRampUp on steps=%d, timeacc=%dms\r\n", dsps, time);
+
+     HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
+
+     while( ( tmpsps < ee_data.spsmax*100 )
+            & (steps_in > 0 ) )
+     {
+        if ( SEM_EL & (dir == 0) ) {
+            break;
+        }
+        if ( SEM_ER & (dir == 1) ) {
+            break;
+        }
+        int delay_in_us = reci(tmpsps/100);
+        // cdcprintf("will delay on %d - %u us\r\n", tmpsps/100, delay_in_us);
+        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
+        delay_us(50-3);       // 3us lag
+        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
+        delay_us(delay_in_us-3);
+        tmpsps+=ee_data.spsps;
+        steps_in--;
+     }
+
+    cdcprintf("out JogRampUp on pulse=%d\r\n", steps_in);
     return 0;
 }
 
@@ -371,82 +393,6 @@ int LJog()
         pulse++;
     }
     cdcprintf("out LJog on pulse=%d\r\n", pulse-1);
-    return 0;
-}
-
-//RIGHT JOGS
-int RJogRampUp()
-{
-    cdcprintf("in RJogRampUp\r\n");
-
-    // 0 = L, 1 = R GPIO_PIN_SET for L
-    HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_RESET);
-    delay_us(delayafterdir);       //lag minimum - to be variable from V min
-
-    //
-    pulse = 1;
-    while ( (pulse <= steps4acc) & SEM_JOGR & !SEM_ER ) {
-        //
-        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
-        delay_us(pulsedur-3);       // 3us lag
-        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
-        delay_us(pulsedur-3);       //3us lag
-
-        //
-        delay = (steps4acc - pulse) * accmult + jogspeed;
-        delay_us( delay );   //da se prepravi smetkata s maxvelocity
-        //
-        pulse++;
-    }
-    cdcprintf("out RJogRampUp on pulse=%d\r\n", pulse-1);
-    return 0;
-}
-
-//
-int RJogRampDown()
-{
-    cdcprintf("in RJogRampDown\r\n");
-
-    //
-    pulse = 1;
-    while ( (pulse <= steps4decc) & !SEM_ER ) {
-        //
-        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
-        delay_us(pulsedur-3);       // 3us lag
-        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
-        delay_us(pulsedur-3);       //3us lag
-
-        //
-        delay = pulse * deccmult + jogspeed;
-        delay_us( delay ); //da se prepravi smetkata s maxvelocity
-        //
-        pulse++;
-    }
-    cdcprintf("out RJogRampDown on pulse=%d\r\n", pulse-1);
-    return 0;
-}
-
-//
-int RJog()
-{
-    cdcprintf("in RJog\r\n");
-
-    //
-    pulse = 1;
-    while ( SEM_JOGR & !SEM_ER ) {
-        //
-        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
-        delay_us(pulsedur-3);       // 3us lag
-        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
-        delay_us(pulsedur-3);       //3us lag
-
-        //
-        delay = jogspeed;
-        delay_us( delay ); //da se prepravi smetkata s maxvelocity
-        //
-        pulse++;
-    }
-    cdcprintf("out RJog on pulse=%d\r\n", pulse-1);
     return 0;
 }
 
@@ -693,6 +639,11 @@ int main(void)
   dumpVars();
   dumpIO();
 
+
+  // states of the outputs
+  HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_SET);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -713,30 +664,31 @@ int main(void)
     if ( SEM_JOGL ) {
             cdcprintf("JOGL\r\n");
             printSemaphore();
-            LJogRampUp();
-            LJog();
-            LJogRampDown();
+            // LJogRampUp();
+            // LJog();
+            // LJogRampDown();
     }
 
     //JOGR - buttons to GND, limit switches too
     if ( SEM_JOGR ) {
             cdcprintf("JOGR\r\n");
             printSemaphore();
-            RJogRampUp();
-            RJog();
-            RJogRampDown();
+            // RJogRampUp();
+            // RJog();
+            // RJogRampDown();
     }
 
     if ( semaphore & ( 1 << JOGSTEPL) ) {
         cdcprintf("JOGSTEPL\r\n");
-        goJogStep(0, ee_data.jogsteps, 0);
+        // goJogStep(0, ee_data.jogsteps, 0);
+        JogRampUp(0, ee_data.jogsteps);
         semaphore &= ~( 1 << JOGSTEPL);
         cdcprintf("JOGSTEPL END\r\n");
     }
 
     if ( semaphore & ( 1 << JOGSTEPR) ) {
         cdcprintf("JOGSTEPR\r\n");
-        goJogStep(1, ee_data.jogsteps, 0);
+        JogRampUp(1, ee_data.jogsteps);
         semaphore &= ~( 1 << JOGSTEPR);
         cdcprintf("JOGSTEPR END\r\n");
     }
@@ -1155,10 +1107,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
   //EL forbids L MOVEMENT
   if ( SEM_EL ) {
+    cdcprintf("SEM_EL\r\n");
     semaphore &= ~((1 << JOGSTEPL) | (1 << JOGL) | (1 << STEPL));
   }
   //ER forbids R MOVEMENT
   if ( SEM_ER ) {
+    cdcprintf("SEM_ER\r\n");
     semaphore &= ~((1 << JOGSTEPR) | (1 << JOGR) | (1 << STEPR));
   }
 
