@@ -149,7 +149,9 @@ float t = 1.23;
 uint32_t pulse          = 0;                //global used below
 //
 uint8_t cmdindex = 0;
-uint8_t *cmd = &UserRxBufferFS[0]+4;        //
+uint8_t cmd[16];                            //
+//
+uint8_t buffx[129];                         //TX buffer
 
 int tmpret;                                 //
 uint32_t debugonly = 0;
@@ -186,7 +188,7 @@ void readVariables();
 
 //
 void User_TIMPeriodElapsedCallback();
-
+uint32_t JogRampUp(uint8_t dir, uint32_t steps_in);
 //
 void printSemaphore()
 {
@@ -199,6 +201,7 @@ uint8_t cdcprintf(const char *format, ... )
     uint8_t result = USBD_FAIL;
 
     if (incdcprintf == 1) {
+        BKPT;
         return result;
     }
 
@@ -206,7 +209,7 @@ uint8_t cdcprintf(const char *format, ... )
 
     va_list ap;
 
-    uint8_t buffx[128] = "NOT SET!";
+    memset(buffx, 0, sizeof(buffx));
 
     va_start(ap, format);
         result = vsprintf(buffx, format, ap);
@@ -299,18 +302,56 @@ int goJogStep(uint8_t dir, uint32_t steps, int speed)  //speed in hz           /
      return 0;
  }
 
+void home()
+ {
+     uint32_t tmp_ee_data_spsps = ee_data.spsps;
+     uint32_t tmp_ee_data_spsmax = ee_data.spsmax;
+     uint32_t tmp_ee_data_spsmin = ee_data.spsmin;
+
+     // ee_data.spsps=1;
+     // ee_data.spsmax=10;
+     // ee_data.spsmin=1;
+
+     while (1) {
+        JogRampUp(0,ee_data.jogsteps);
+        JogRampUp(1,ee_data.jogsteps);
+
+         if (SEM_EL) {
+            JogRampUp(1,ee_data.jogsteps);
+         }
+         if (SEM_ER) {
+            JogRampUp(0,ee_data.jogsteps);
+         }
+         // if (!SEM_EL & !SEM_ER) {
+             // break;
+         // }
+     }
+     ee_data.spsps=tmp_ee_data_spsps;
+     ee_data.spsmax=tmp_ee_data_spsmax;
+     ee_data.spsmin=tmp_ee_data_spsmin;
+
+     cdcprintf("izliazohme\r\n");
+ }
+
 //
-int JogRampUp(uint8_t dir, uint32_t steps_in)
+uint32_t JogRampUp(uint8_t dir, uint32_t steps_in)
 {
-    cdcprintf("in JogRampUp dir=%d\r\n", dir);
+     uint32_t stepscompleted = 0;
 
      // 0 = L, 1 = R GPIO_PIN_SET for L
     if (dir == 0) {
         HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_SET);
+         if (SEM_EL) {
+            return 0;
+         }
     }
     if (dir == 1) {
         HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_RESET);
+         if (SEM_ER) {
+            return 0;
+         }
     }
+    cdcprintf("in JogRampUp dir=%d\r\n", dir);
 
     delay_us(delayafterdir);       //lag minimum - to be variable from V min
 
@@ -342,10 +383,11 @@ int JogRampUp(uint8_t dir, uint32_t steps_in)
         delay_us(delay_in_us-3);
         tmpsps+=ee_data.spsps;
         steps_in--;
+        stepscompleted++;
      }
 
-    cdcprintf("out JogRampUp on pulse=%d\r\n", steps_in);
-    return 0;
+    cdcprintf("out JogRampUp on steps_in=%d completed=%d\r\n", steps_in, stepscompleted);
+    return stepscompleted;
 }
 
 //
@@ -399,14 +441,17 @@ int LJog()
 //receiver
 void CDCReceiveChar(uint8_t* inchar)
 {
+    // cdcprintf("RX:%s", inchar);
     //long commands - overflow
     if (cmdindex >= 15) {
         cmdindex = 0;
         rcs = RX_OF;
+        BKPT;
         return;
     }
     //end of command - cr
     if (*inchar == 13) {
+        // BKPT;
         cmdindex = 0;
         rcs = RX_CR;
         return;
@@ -425,7 +470,6 @@ void CDCReceiveChar(uint8_t* inchar)
     }
 
     cmd[cmdindex++] = *inchar;
-    // UserRxBufferFS[cmdindex] = *inchar;
 }
 
 //
@@ -434,15 +478,15 @@ void dumpIO()
     //GPIO_PinState RESET = 0, 1 SET
     // HAL_GPIO_ReadPin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
 
-    cdcprintf("----------------------\r\n");
+    cdcprintf("-------%08d-------\r\n", debugonly++);
     cdcprintf("Dump/set of IO\r\n");
     cdcprintf("----------------------\r\n");
     cdcprintf("JOGL (PA6)  : %d\r\n", HAL_GPIO_ReadPin(BUTT_JOGL_GPIO_Port, BUTT_JOGL_Pin));
     cdcprintf("JOGR (PA7)  : %d\r\n", HAL_GPIO_ReadPin(BUTT_JOGR_GPIO_Port, BUTT_JOGR_Pin));
     cdcprintf("STEPL (PB0) : %d\r\n", HAL_GPIO_ReadPin(BUTT_STEPL_GPIO_Port, BUTT_STEPL_Pin));
     cdcprintf("STEPR (PB1) : %d\r\n", HAL_GPIO_ReadPin(BUTT_STEPR_GPIO_Port, BUTT_STEPR_Pin));
-    cdcprintf("ESL  (PB2)  : %d\r\n", HAL_GPIO_ReadPin(ES_L_GPIO_Port, ES_L_Pin));
-    cdcprintf("ESR  (PB10) : %d\r\n", HAL_GPIO_ReadPin(ES_R_GPIO_Port, ES_R_Pin));
+    cdcprintf("ESL  (PB10) : %d\r\n", HAL_GPIO_ReadPin(ES_L_GPIO_Port, ES_L_Pin));
+    cdcprintf("ESR  (PB11) : %d\r\n", HAL_GPIO_ReadPin(ES_R_GPIO_Port, ES_R_Pin));
     cdcprintf("----------------------\r\n");
 }
 
@@ -450,17 +494,31 @@ void dumpIO()
 void dumpVars()
 {
     readVariables();
-    cdcprintf("----------------------\r\n");
+    cdcprintf("----------%08d-----\r\n", debugonly++);
     cdcprintf("Dump of NVARS in EEPROM\r\n");
-    cdcprintf("----------------------\r\n");
-    cdcprintf("spsmax       : %d\r\n", ee_data.spsmax);
-    cdcprintf("spsmin       : %d\r\n", ee_data.spsmin);
-    cdcprintf("spsps        : %d\r\n", ee_data.spsps);
-    cdcprintf("jogsteps     : %d\r\n", ee_data.jogsteps);
-    cdcprintf("ssteps       : %d\r\n", ee_data.ssteps);
-    cdcprintf("----------------------\r\n");
-    cdcprintf("RECI:  %d\r\n", reci(3));
-    cdcprintf("----------------------\r\n");
+    cdcprintf("-----------------------\r\n");
+    cdcprintf("spsmax.......: %d\r\n", ee_data.spsmax);
+    cdcprintf("spsmin.......: %d\r\n", ee_data.spsmin);
+    cdcprintf("spsps........: %d\r\n", ee_data.spsps);
+    cdcprintf("jogsteps.....: %d\r\n", ee_data.jogsteps);
+    cdcprintf("ssteps.......: %d\r\n", ee_data.ssteps);
+    cdcprintf("-----------------------\r\n");
+    cdcprintf("semaphore....:  %d\r\n", semaphore);
+    cdcprintf("SEM_EL.......:  %d\r\n", SEM_EL);
+    cdcprintf("SEM_ER.......:  %d\r\n", SEM_ER);
+    cdcprintf("SEM_JOGL.....:  %d\r\n", SEM_JOGL);
+    cdcprintf("SEM_JOGR.....:  %d\r\n", SEM_JOGR);
+    cdcprintf("SEM_JOGSTEPL.:  %d\r\n", SEM_JOGSTEPL);
+    cdcprintf("SEM_JOGSTEPR.:  %d\r\n", SEM_JOGSTEPR);
+    cdcprintf("-----------------------\r\n");
+    cdcprintf("DB_JOGL......:  %d\r\n", DB_JOGL);
+    cdcprintf("DB_JOGR......:  %d\r\n", DB_JOGR);
+    cdcprintf("DB_STEPL.....:  %d\r\n", DB_STEPL);
+    cdcprintf("DB_STEPR.....:  %d\r\n", DB_STEPR);
+    cdcprintf("DB_EL........:  %d\r\n", DB_EL);
+    cdcprintf("DB_ER........:  %d\r\n", DB_ER);
+    cdcprintf("DB_EE........:  %d\r\n", DB_EE);
+    cdcprintf("-----------------------\r\n");
 }
 
 //
@@ -605,10 +663,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   // HAL_TIM_Base_Start(&htim2);
-  HAL_Delay(1000);      //wait for USB reenumeration
+  HAL_Delay(1200);      //wait for USB reenumeration
 
   //boot pritnf
-  memset(UserRxBufferFS, 0, sizeof(UserRxBufferFS));
+  memset(cmd, 0, sizeof(cmd));
 
   //
   cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n");
@@ -616,7 +674,6 @@ int main(void)
   //
   HAL_TIM_RegisterCallback(&htim3, HAL_TIM_PERIOD_ELAPSED_CB_ID, User_TIMPeriodElapsedCallback);
   HAL_TIM_RegisterCallback(&htim1, HAL_TIM_PERIOD_ELAPSED_CB_ID, Tim1Callback);
-  Tim1Start();
 
   //
   Status = HAL_FLASH_Unlock();      //fixme. move the same into ee_init and into ww_writevariable
@@ -667,6 +724,8 @@ int main(void)
             // LJogRampUp();
             // LJog();
             // LJogRampDown();
+            semaphore &= ~( 1 << JOGL);
+            cdcprintf("JOGL END\r\n");
     }
 
     //JOGR - buttons to GND, limit switches too
@@ -676,17 +735,19 @@ int main(void)
             // RJogRampUp();
             // RJog();
             // RJogRampDown();
+            semaphore &= ~( 1 << JOGR);
+            cdcprintf("JOGR END\r\n");
     }
 
-    if ( semaphore & ( 1 << JOGSTEPL) ) {
+    if ( SEM_JOGSTEPL ) {
         cdcprintf("JOGSTEPL\r\n");
         // goJogStep(0, ee_data.jogsteps, 0);
-        JogRampUp(0, ee_data.jogsteps);
+        JogRampUp(0, ee_data.jogsteps);         //returns how many steps are completed
         semaphore &= ~( 1 << JOGSTEPL);
         cdcprintf("JOGSTEPL END\r\n");
     }
 
-    if ( semaphore & ( 1 << JOGSTEPR) ) {
+    if ( SEM_JOGSTEPR ) {
         cdcprintf("JOGSTEPR\r\n");
         JogRampUp(1, ee_data.jogsteps);
         semaphore &= ~( 1 << JOGSTEPR);
@@ -748,35 +809,48 @@ int main(void)
         else if (strcmp(cmd, "reset") == 0) {
             cdcprintf("RES:reset\r\n");
             NVIC_SystemReset();
-        } else if (strcmp(cmd, "dump") == 0) {
+        }
+        else if (strcmp(cmd, "home") == 0) {
+            cdcprintf("RES:dump %s\r\n", cmd);
+            home();
+        }
+        else if (strcmp(cmd, "dump") == 0) {
             cdcprintf("RES:dump %s\r\n", cmd);
             dumpVars();
-        } else if (strcmp(cmd, "dumpio") == 0) {
+        }
+        else if (strcmp(cmd, "dumpio") == 0) {
             cdcprintf("RES:dumpio %s\r\n", cmd);
             dumpIO();
-        } else if (strcmp(cmd, "help") == 0) {
+        }
+        else if (strcmp(cmd, "help") == 0) {
             help();
-        } else if (strcmp(cmd,"a") == 0) {
+        }
+        else if (strcmp(cmd,"a") == 0) {
             cdcprintf("enter value for spsmax:");
             rcs2 = RX_ECHO_ON;
             it = RX_VAR1;
-        } else if (strcmp(cmd,"b") == 0) {
+        }
+        else if (strcmp(cmd,"b") == 0) {
             cdcprintf("enter value for spsmin:");
             rcs2 = RX_ECHO_ON;
             it = RX_VAR2;
-        } else if (strcmp(cmd,"c") == 0) {
+        }
+        else if (strcmp(cmd,"c") == 0) {
             cdcprintf("enter value spsps:");
             rcs2 = RX_ECHO_ON;
             it = RX_VAR3;
-        } else if (strcmp(cmd,"d") == 0) {
+        }
+        else if (strcmp(cmd,"d") == 0) {
             cdcprintf("enter value jogsteps:");
             rcs2 = RX_ECHO_ON;
             it = RX_VAR4;
-        } else if (strcmp(cmd,"e") == 0) {
+        }
+        else if (strcmp(cmd,"e") == 0) {
             cdcprintf("enter value ssteps:");
             rcs2 = RX_ECHO_ON;
             it = RX_VAR5;
-        } else if (strcmp(cmd,"g") == 0) {
+        }
+        else if (strcmp(cmd,"g") == 0) {
             cdcprintf("go running!\r\n");
             goJogStep(0, ee_data.jogsteps, 100);
             delay_us(500);
@@ -785,15 +859,14 @@ int main(void)
         else {
             cdcprintf("RES: UNKNOWN COMMAND: %s\r\n", cmd);
         }
-        memset(UserRxBufferFS, 0, sizeof(UserRxBufferFS));
+        memset(cmd, 0, sizeof(cmd));
+        rcs = RX_NOTCPLT;      //reset status
     } else if (rcs == RX_OF) {
         cdcprintf("\r\nRES: OVERFLOW.\r\n");    //keep it smaller
         rcs2 = RX_ECHO_OFF;
         it = RX_NONE;
-        memset(UserRxBufferFS, 0, sizeof(UserRxBufferFS));
+        memset(cmd, 0, sizeof(cmd));
     }
-
-    rcs = RX_NOTCPLT;      //reset status
 
     /* USER CODE END WHILE */
 
@@ -1087,6 +1160,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     semaphore |= (1 << EL);
     Tim1Stop();
     Tim3Stop();
+    semaphore &= ~((1 << JOGL) | (1 << JOGSTEPL) | (1 << STEPL) | (1 << JOGL_DB) | (1 << STEPL_DB));
   }
   if( PIN_EL_SET & (GPIO_Pin == GPIO_PIN_10) ) {
     cdcprintf("EL1\r\n");
@@ -1099,6 +1173,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     semaphore |= (1 << ER);
     Tim1Stop();
     Tim3Stop();
+    semaphore &= ~((1 << JOGR) | (1 << JOGSTEPR) | (1 << STEPR) | (1 << JOGR_DB) | (1 << STEPR_DB));
   }
   if( PIN_ER_SET & (GPIO_Pin == GPIO_PIN_11) ) {
     cdcprintf("ER1\r\n");
@@ -1122,40 +1197,52 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   }
 
   // allow only LEFT commands
-  if ( !SEM_EL ) {
+  // if ( !SEM_EL ) {
       // JOG LEFT button pressed
-      if( PIN_JOGL_RESET & (GPIO_Pin == GPIO_PIN_6) ) {
-        semaphore |= (1 << JOGL_DB);
-        cdcprintf("JL0\r\n");
-        Tim1Start();
-        Tim3Start();
+      if( PIN_JOGL_RESET & (GPIO_Pin == GPIO_PIN_6) & !SEM_JOGR & !SEM_JOGSTEPR) {
+        if (!SEM_EL) {
+            cdcprintf("JL0\r\n");
+            semaphore |= (1 << JOGL_DB);
+            semaphore &= ~( (1 << JOGR_DB) );
+            Tim1Stop();
+            Tim3Stop();
+            Tim1Start();
+            Tim3Start();
+        } else {
+            cdcprintf("JL00\r\n");
+        }
+        return;
       }
 
       // JOG LEFT button released
       if( PIN_JOGL_SET & (GPIO_Pin == GPIO_PIN_6) ) {
         cdcprintf("JL1\r\n");
-        semaphore &= ~( (1 << JOGL) | (1 << JOGSTEPL) | (1 << JOGL_DB) );
-        Tim1Stop();
       }
-  }
+  // }
 
   // allow only RIGHT commands
-  if ( !SEM_ER ) {
+  // if ( !SEM_ER ) {
       // JOG RIGHT button pressed
-      if( PIN_JOGR_RESET & (GPIO_Pin == GPIO_PIN_7) ) {
-        semaphore |= (1 << JOGR_DB);
-        cdcprintf("JR0\r\n");
-        Tim1Start();
-        Tim3Start();
+      if( PIN_JOGR_RESET & (GPIO_Pin == GPIO_PIN_7) & !SEM_JOGL & !SEM_JOGSTEPL) {
+        if (!SEM_ER) {
+            cdcprintf("JR0\r\n");
+            semaphore |= (1 << JOGR_DB);
+            semaphore &= ~( (1 << JOGL_DB) );
+            Tim1Stop();
+            Tim3Stop();
+            Tim1Start();
+            Tim3Start();
+        } else {
+            cdcprintf("JR00\r\n");
+        }
+        return;
       }
 
       // JOG RIGHT button released
       if( PIN_JOGR_SET & (GPIO_Pin == GPIO_PIN_7) ) {
         cdcprintf("JR1\r\n");
-        semaphore &= ~( (1 << JOGR) | (1 << JOGSTEPR) | (1 << JOGR_DB) );
-        Tim1Stop();
       }
-  }
+  // }
 }
 
 //
@@ -1209,8 +1296,9 @@ void Tim1Callback()
 // buttons  release handling
 void User_TIMPeriodElapsedCallback()
 {
+  cdcprintf("T3:%08x\r\n", semaphore);
   //JOG LEFT
-  if ( semaphore & (1 << JOGL_DB) ) {            // v process na debounce-vame se
+  if ( DB_JOGL ) {            // v process na debounce-vame se
     if ( PIN_JOGL_RESET ) {
         cdcprintf("JLT0\r\n");          //da pravim step 1mm
         semaphore |= (1 << JOGSTEPL);
@@ -1220,10 +1308,11 @@ void User_TIMPeriodElapsedCallback()
         semaphore &= ~((1 << JOGL) | (1 << JOGSTEPL));      //release JOGs flags
     }
     semaphore &= ~(1 << JOGL_DB);                // svaliame debouncinga
+    return;
   }
 
   //JOG RIGHT
-  if ( semaphore & (1 << JOGR_DB) ) {            // v process na debounce-vame se
+  if ( DB_JOGR ) {            // v process na debounce-vame se
     if ( PIN_JOGR_RESET ) {
         cdcprintf("JRT0\r\n");          //da pravim step 1mm
         semaphore |= (1 << JOGSTEPR);
@@ -1234,6 +1323,7 @@ void User_TIMPeriodElapsedCallback()
     }
     semaphore &= ~(1 << JOGR_DB);                // svaliame debouncinga
   }
+  return;
 }
 
 /* USER CODE END 4 */
