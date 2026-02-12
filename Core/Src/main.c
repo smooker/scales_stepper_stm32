@@ -182,14 +182,14 @@ static void MX_TIM1_Init(void);
 //DECLARES
 void Tim1Start();
 void Tim1Stop();
-void Tim1Callback();
+void TIM1Callback();
 void Tim3Start();
 void Tim3Stop();
 //
 void readVariables();
 
 //
-void User_TIMPeriodElapsedCallback();
+void TIM3Callback();
 uint32_t JogRampUp(uint8_t dir, uint32_t steps_in);
 //
 void printSemaphore()
@@ -388,27 +388,38 @@ uint32_t JogRampUp(uint8_t dir, uint32_t steps_in)
 }
 
 //
-int LJog()
+uint32_t constvel(uint32_t steps_in)
 {
-    cdcprintf("in LJog\r\n");
+    uint32_t stepscompleted = 0;
 
-    //
-    pulse = 1;
-    while ( SEM_JOGL & !SEM_EL ) {
-        //
-        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
-        delay_us(pulsedur-3);       // 3us lag
+    cdcprintf("CV0:%d\r\n", steps_in);
+
+    uint32_t tmpsps = ee_data.spsmax * 100;
+
+    cdcprintf("CV1:%d\r\n", tmpsps);
+
+    while( steps_in > 0 )
+    {
+        if ( SEM_EL ) {
+            break;
+        }
+        if ( SEM_ER ) {
+            break;
+        }
+        int delay_in_us = reci(tmpsps/100);
+
         HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
-        delay_us(pulsedur-3);       //3us lag
+        delay_us(50-3);       // 3us lag
 
-        //
-        delay = jogspeed;
-        delay_us( delay ); //da se prepravi smetkata s maxvelocity
-        //
-        pulse++;
+        HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
+        delay_us(delay_in_us-3);
+
+        steps_in--;
+        stepscompleted++;
     }
-    cdcprintf("out LJog on pulse=%d\r\n", pulse-1);
-    return 0;
+
+    cdcprintf("JRU2:%d:%d\r\n", steps_in, stepscompleted);
+    return stepscompleted;
 }
 
 //receiver
@@ -644,8 +655,8 @@ int main(void)
   cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n");
 
   //
-  HAL_TIM_RegisterCallback(&htim3, HAL_TIM_PERIOD_ELAPSED_CB_ID, User_TIMPeriodElapsedCallback);
-  HAL_TIM_RegisterCallback(&htim1, HAL_TIM_PERIOD_ELAPSED_CB_ID, Tim1Callback);
+  HAL_TIM_RegisterCallback(&htim3, HAL_TIM_PERIOD_ELAPSED_CB_ID, TIM3Callback);
+  HAL_TIM_RegisterCallback(&htim1, HAL_TIM_PERIOD_ELAPSED_CB_ID, TIM1Callback);
 
   //
   Status = HAL_FLASH_Unlock();      //fixme. move the same into ee_init and into ww_writevariable
@@ -1133,7 +1144,7 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  cdcprintf("EXTI %04x\r\n", GPIO_Pin);
+  // cdcprintf("EXTI %04x\r\n", GPIO_Pin);
 
   //EL pin handling
   if( PIN_EL_RESET & (GPIO_Pin == GPIO_PIN_10) ) {
@@ -1186,7 +1197,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         semaphore &= ~( (1 << JOGR_DB) );
         Tim1Stop();
         Tim3Stop();
-        Tim1Start();
         Tim3Start();
     } else {
         cdcprintf("JL00\r\n");
@@ -1208,7 +1218,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         semaphore &= ~( (1 << JOGL_DB) );
         Tim1Stop();
         Tim3Stop();
-        Tim1Start();
         Tim3Start();
     } else {
         cdcprintf("JR00\r\n");
@@ -1227,7 +1236,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     semaphore |= (1 << STEPL);
     Tim1Stop();
     Tim3Stop();
-    Tim1Start();
     Tim3Start();
   }
 
@@ -1237,7 +1245,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     semaphore |= (1 << STEPR);
     Tim1Stop();
     Tim3Stop();
-    Tim1Start();
     Tim3Start();
   }
 }
@@ -1247,6 +1254,7 @@ void Tim3Start() {
   //
   __HAL_TIM_CLEAR_IT(&htim3, TIM_IT_UPDATE);
   htim3.Instance->ARR=20; //20ms
+  htim1.Instance->CNT=0;
   __HAL_TIM_ENABLE_IT(&htim3,TIM_IT_UPDATE);
   __HAL_TIM_ENABLE(&htim3);
 }
@@ -1262,6 +1270,7 @@ void Tim3Stop() {
 void Tim1Start() {
     __HAL_TIM_CLEAR_IT(&htim1, TIM_IT_UPDATE);
     htim1.Instance->ARR=1000;    //1000ms
+    htim1.Instance->CNT=0;
     __HAL_TIM_ENABLE_IT(&htim1,TIM_IT_UPDATE);
     __HAL_TIM_ENABLE(&htim1);
 }
@@ -1273,7 +1282,7 @@ void Tim1Stop() {
     __HAL_TIM_DISABLE(&htim1);
 }
 
-void Tim1Callback()
+void TIM1Callback()
 {
   HAL_GPIO_TogglePin(LED_USER_GPIO_Port, LED_USER_Pin);
   cdcprintf("TIM1 fired:0x%08x\r\n", debugonly++);
@@ -1291,7 +1300,7 @@ void Tim1Callback()
 }
 
 // buttons  release handling
-void User_TIMPeriodElapsedCallback()
+void TIM3Callback()
 {
   cdcprintf("T3:%08x\r\n", semaphore);
   //JOG LEFT
@@ -1299,10 +1308,12 @@ void User_TIMPeriodElapsedCallback()
     if ( PIN_JOGL_RESET ) {
         cdcprintf("JLT0\r\n");          //da pravim step 1mm
         semaphore |= (1 << JOGSTEPL);
+        Tim1Start();
     }
     if ( PIN_JOGL_SET ) {
         cdcprintf("JLT1\r\n");
         semaphore &= ~((1 << JOGL) | (1 << JOGSTEPL));      //release JOGs flags
+        Tim1Stop();
     }
     semaphore &= ~(1 << JOGL_DB);                // svaliame debouncinga
     return;
@@ -1313,10 +1324,12 @@ void User_TIMPeriodElapsedCallback()
     if ( PIN_JOGR_RESET ) {
         cdcprintf("JRT0\r\n");          //da pravim step 1mm
         semaphore |= (1 << JOGSTEPR);
+        Tim1Start();
     }
     if ( PIN_JOGR_SET ) {
         cdcprintf("JRT1\r\n");
         semaphore &= ~((1 << JOGR) | (1 << JOGSTEPR));      //release JOGs flags
+        Tim1Stop();
     }
     semaphore &= ~(1 << JOGR_DB);                // svaliame debouncinga
   }
@@ -1327,10 +1340,12 @@ void User_TIMPeriodElapsedCallback()
         cdcprintf("SLT0\r\n");          //da pravim step 1mm
         semaphore |= (1 << STEPL);
         semaphore &= ~( (1 << JOGL) | (1 << JOGSTEPL) );
+        Tim1Start();
     }
     if ( PIN_STEPL_SET ) {
         cdcprintf("SLT1\r\n");
         semaphore &= ~( (1 << JOGL) | (1 << JOGSTEPL) | (1 << STEPL) );      //release JOGs flags
+        Tim1Stop();
     }
   }
 
@@ -1341,10 +1356,12 @@ void User_TIMPeriodElapsedCallback()
         cdcprintf("SRT0\r\n");          //da pravim step 1mm
         semaphore |= (1 << STEPR);
         semaphore &= ~( (1 << JOGR) | (1 << JOGSTEPR) );
+        Tim1Start();
     }
     if ( PIN_STEPR_SET ) {
         cdcprintf("SRT1\r\n");
         semaphore &= ~( (1 << JOGR) | (1 << JOGSTEPR) | (1 << STEPR) );      //release JOGs flags
+        Tim1Stop();
     }
   }
 
