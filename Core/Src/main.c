@@ -213,11 +213,9 @@ uint8_t cdcprintf(const char *format, ... )
     va_end(ap);
     uint8_t len = strlen((const char*)buffx);
 
-    // if (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) {
-        while (result != USBD_OK) {
-            result = CDC_Transmit_FS(buffx, (uint16_t)len);
-        }
-    // }
+    while (result != USBD_OK) {
+        result = CDC_Transmit_FS(buffx, (uint16_t)len);
+    }
 
     incdcprintf = 0;
     return result; //
@@ -263,7 +261,7 @@ void delay_us(uint32_t us)
 
 // homing
 void home()
- {
+{
      uint32_t tmp_ee_data_spsps = ee_data.spsps;
      uint32_t tmp_ee_data_spsmax = ee_data.spsmax;
      uint32_t tmp_ee_data_spsmin = ee_data.spsmin;
