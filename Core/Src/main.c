@@ -213,9 +213,12 @@ uint8_t cdcprintf(const char *format, ... )
     va_end(ap);
     uint8_t len = strlen((const char*)buffx);
 
-    while (result != USBD_OK) {
-        result = CDC_Transmit_FS(buffx, (uint16_t)len);
-    }
+    // if (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) {
+        while (result != USBD_OK) {
+            result = CDC_Transmit_FS(buffx, (uint16_t)len);
+        }
+    // }
+
     incdcprintf = 0;
     return result; //
 }
@@ -269,11 +272,13 @@ void home()
      ee_data.spsmax=200;
      ee_data.spsmin=80;
 
-     while ( PIN_JOGL_RESET & PIN_JOGL_RESET ) {
+     while ( PIN_JOGL_RESET | PIN_JOGL_RESET ) {
         cdcprintf("RELEASE JOGL AND JOGR BUTTONS\r\n");
      }
 
      cdcprintf("THANK YOU!\r\n");
+
+     delay_us(65530);
 
      while (1) {
          if (SEM_EL) {
@@ -322,18 +327,16 @@ uint32_t JogRampUp(uint8_t dir, uint32_t steps_in, uint8_t jsmode)
 
     delay_us(delayafterdir);
 
-     uint32_t tmpsps = ee_data.spsmin * 100;
-     int dsps = ee_data.spsmax-ee_data.spsmin;            //
+    uint32_t tmpsps = ee_data.spsmin * 100;
+    int dsps = ee_data.spsmax-ee_data.spsmin;            //
 
-     delay_us(50);
+    cdcprintf("JRU1:%d\r\n", dsps);
 
-     cdcprintf("JRU1:%d\r\n", dsps);
+    // HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);       //checkme. prevantive
 
-     HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);       //checkme
-
-     while( ( tmpsps < ee_data.spsmax*100 )
+    while( ( tmpsps < ee_data.spsmax*100 )
             & (steps_in > 0 ) )
-     {
+    {
         if ( SEM_EL & (dir == 0) ) {
             break;
         }
@@ -348,9 +351,9 @@ uint32_t JogRampUp(uint8_t dir, uint32_t steps_in, uint8_t jsmode)
         }
 
         int delay_in_us = reci(tmpsps/100);
-        if ( (debugonly++ % 30) == 0) {
-            cdcprintf("WDO:%d:%uus\r\n", tmpsps/100, delay_in_us);
-        }
+        // if ( (debugonly++ % 30) == 0) {
+        //     cdcprintf("WDO:%d:%uus\r\n", tmpsps/100, delay_in_us);
+        // }
 
         HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_RESET);
         delay_us(pulsedur-3);       // 3us lag
@@ -367,14 +370,14 @@ uint32_t JogRampUp(uint8_t dir, uint32_t steps_in, uint8_t jsmode)
         tmpsps+=ee_data.spsps;
         steps_in--;
         stepscompleted++;
-     }
+    }
 
-    cdcprintf("JRU2:%d:%d\r\n", steps_in, stepscompleted);
+    cdcprintf("JRU2:%d:%d\r\n", steps_in, stepscompleted);      //remainng steps to complete - steps_in
     cdcprintf("JRU3:%08d\r\n", abspos);
     return stepscompleted;
 }
 
-// constant velocity routine
+// constant velocity routine. jsmode 0 - jog, 1 - step, 2 - homing
 uint32_t constvel(uint8_t dir, uint32_t steps_in, uint8_t jsmode)
 {
     uint32_t stepscompleted = 0;
@@ -739,13 +742,20 @@ int main(void)
 
     if ( SEM_STEPL ) {
         cdcprintf("STL0\r\n");
-        JogRampUp(0, ee_data.ssteps, 1);
+        uint32_t remsteps = JogRampUp(0, ee_data.ssteps, 1);
+        uint32_t remsteps4rd = remsteps;
+        remsteps = ee_data.ssteps - remsteps;
+        constvel(0, remsteps, 1);
+
         semaphore &= ~( 1 << STEPL);
         cdcprintf("STL1\r\n");
     }
     if ( SEM_STEPR ) {
         cdcprintf("STR0\r\n");
-        JogRampUp(1, ee_data.ssteps, 1);         //returns how many steps are completed
+        uint32_t remsteps = JogRampUp(1, ee_data.ssteps, 1);
+        uint32_t remsteps4rd = remsteps;
+        remsteps = ee_data.ssteps - remsteps;
+        constvel(1, remsteps, 1);
         semaphore &= ~( 1 << STEPR);
         cdcprintf("STR1\r\n");
     }
