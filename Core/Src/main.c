@@ -150,6 +150,11 @@ uint32_t debugonly      = 0;                //
 uint8_t incdcprintf     = 0;                //
 
 //
+const unsigned char* morseCode[] = {".-", "-...", "-.-.", "-..", ".", "..-.",
+                            "--.", "....", "..", ".---", "-.-", ".-..", "--", "-.", "---", ".--.", "--.-",
+                            ".-.", "...", "-", "..-", "...-", ".--", "-..-", "-.--", "--.."};   //morse code from A to Z
+
+//
 CDCReceiveCharTypes rcs = RX_NOTCPLT;       //
 echoTypes rcs2 = RX_ECHO_OFF;               //
 inputTypes it = RX_NONE;                    //
@@ -177,6 +182,11 @@ void Tim1Stop();
 void TIM1Callback();
 void Tim3Start();
 void Tim3Stop();
+void delay_us(uint32_t us);
+void delay_ms(uint32_t ms);
+void dot();
+void dash();
+uint8_t morse(const char *format, ... );
 
 //
 void readVariables();
@@ -191,6 +201,71 @@ uint32_t constvel(uint8_t dir, uint32_t steps_in, uint8_t jsmode);
 // {
 //  cdcprintf("SEM:%08x: %x\r\n", debugonly++, semaphore);
 // }
+
+uint8_t morse(const char *format, ... )
+{
+    va_list ap;
+
+    uint8_t result;
+    uint8_t len;
+
+    unsigned char lettInMorse[8];
+
+    uint8_t pseudoASCII;
+
+    memset(buffx, 0, sizeof(buffx));
+
+    va_start(ap, format);
+    result = vsprintf(buffx, format, ap);
+    va_end(ap);
+
+    len = strlen((const char*)buffx);
+
+    // here
+
+
+    uint8_t cnt2 = 0;
+
+    while (buffx[cnt2] > 0)
+    {
+        pseudoASCII = buffx[cnt2]-65;
+
+        uint8_t cnt = 0;
+
+        while (lettInMorse[cnt] = morseCode[pseudoASCII][cnt]) {
+            if (lettInMorse[cnt] == 0) {
+                //BKPT;
+                delay_ms(100);
+                break;
+            }
+            if (lettInMorse[cnt] == '.') {
+                dot();
+            }
+            if (lettInMorse[cnt] == '-') {
+                dash();
+            }
+            cnt++;
+        }
+        cnt2++;
+    }
+    return result; //
+}
+
+void dot()
+{
+    HAL_GPIO_WritePin(BUZZ_GPIO_Port, BUZZ_Pin, GPIO_PIN_RESET);
+    delay_ms(100);
+    HAL_GPIO_WritePin(BUZZ_GPIO_Port, BUZZ_Pin, GPIO_PIN_SET);
+    delay_ms(100);
+}
+
+void dash()
+{
+    HAL_GPIO_WritePin(BUZZ_GPIO_Port, BUZZ_Pin, GPIO_PIN_RESET);
+    delay_ms(250);
+    HAL_GPIO_WritePin(BUZZ_GPIO_Port, BUZZ_Pin, GPIO_PIN_SET);
+    delay_ms(100);
+}
 
 //
 uint8_t cdcprintf(const char *format, ... )
@@ -231,6 +306,15 @@ uint8_t cdcprintf(const char *format, ... )
 uint32_t reci(uint16_t x) {
     if (x == 0) return 0xFFFFFFFF; // div by 0
     return 1000000 / x;
+}
+
+
+//
+void delay_ms(uint32_t ms)
+{
+    while(ms-- > 0) {
+        delay_us(800);
+    }
 }
 
 // 1MHz = 1us resolution. 3us lag here
@@ -654,6 +738,8 @@ int main(void)
 
   //boot pritnf
   memset(cmd, 0, sizeof(cmd));
+
+  morse("VGZ");
 
   //
   cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n");
@@ -1095,7 +1181,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(HX711_CLK_GPIO_Port, HX711_CLK_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, PULSE_Pin|DIR_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BUZZ_GPIO_Port, BUZZ_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, PULSE_Pin|DIR_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin : LED_USER_Pin */
   GPIO_InitStruct.Pin = LED_USER_Pin;
@@ -1128,12 +1217,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(HX711_DATA_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : HX711_CLK_Pin */
-  GPIO_InitStruct.Pin = HX711_CLK_Pin;
+  /*Configure GPIO pins : HX711_CLK_Pin BUZZ_Pin */
+  GPIO_InitStruct.Pin = HX711_CLK_Pin|BUZZ_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(HX711_CLK_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PULSE_Pin DIR_Pin */
   GPIO_InitStruct.Pin = PULSE_Pin|DIR_Pin;

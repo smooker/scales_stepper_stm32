@@ -110,6 +110,8 @@ void Error_Handler(void);
 #define HX711_DATA_GPIO_Port GPIOB
 #define HX711_CLK_Pin GPIO_PIN_14
 #define HX711_CLK_GPIO_Port GPIOB
+#define BUZZ_Pin GPIO_PIN_15
+#define BUZZ_GPIO_Port GPIOB
 #define PULSE_Pin GPIO_PIN_8
 #define PULSE_GPIO_Port GPIOA
 #define DIR_Pin GPIO_PIN_9
