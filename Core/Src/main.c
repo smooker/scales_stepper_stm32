@@ -143,6 +143,7 @@ uint8_t cmd[16];                            //
 
 //
 uint8_t buffx[129];                         //TX buffer
+uint8_t buffx2[129];                        //TX buffer for morse
 
 //
 int tmpret;                                 //
@@ -150,9 +151,35 @@ uint32_t debugonly      = 0;                //
 uint8_t incdcprintf     = 0;                //
 
 //
-const unsigned char* morseCode[] = {".-", "-...", "-.-.", "-..", ".", "..-.",
-                            "--.", "....", "..", ".---", "-.-", ".-..", "--", "-.", "---", ".--.", "--.-",
-                            ".-.", "...", "-", "..-", "...-", ".--", "-..-", "-.--", "--.."};   //morse code from A to Z
+const unsigned char* morseCode[] = {
+    ".-",               // A
+    "-...",             // B
+    "-.-.",             // C
+    "-..",              // D
+    ".",                // E
+    "..-.",             // F
+    "--.",              // G
+    "....",             // H
+    "..",               // I
+    ".---",             // J
+    "-.-",              // K
+    ".-..",             // L
+    "--",               // M
+    "-.",               // N
+    "---",              // O
+    ".--.",             // P
+    "--.-",             // Q
+    ".-.",              // R
+    "...",              // S
+    "-",                // T
+    "..-",              // U
+    "...-",             // V
+    ".--",              // W
+    "-..-",             // X
+    "-.--",             // Y
+    "--..",             // Z
+    0x00
+};   //morse code from A to Z
 
 //
 CDCReceiveCharTypes rcs = RX_NOTCPLT;       //
@@ -204,6 +231,7 @@ uint32_t constvel(uint8_t dir, uint32_t steps_in, uint8_t jsmode);
 
 uint8_t morse(const char *format, ... )
 {
+    // BKPT;
     va_list ap;
 
     uint8_t result;
@@ -213,26 +241,40 @@ uint8_t morse(const char *format, ... )
 
     uint8_t pseudoASCII;
 
-    memset(buffx, 0, sizeof(buffx));
+    memset(buffx2, 0, sizeof(buffx2));
 
     va_start(ap, format);
-    result = vsprintf(buffx, format, ap);
+    result = vsprintf(buffx2, format, ap);
     va_end(ap);
 
-    len = strlen((const char*)buffx);
+    len = strlen((const char*)buffx2);
 
     // here
-
 
     uint8_t cnt2 = 0;
 
     while (buffx[cnt2] > 0)
     {
-        pseudoASCII = buffx[cnt2]-65;
+        //
+        if ( buffx2[cnt2] == 0x00 ) {
+            break;
+        }
+        //
+        if ( ( buffx2[cnt2] > 90 ) | ( buffx2[cnt2] < 65 ) ) {
+            BKPT;
+            break;
+        }
+
+        pseudoASCII = buffx2[cnt2]-65;
 
         uint8_t cnt = 0;
 
-        while (lettInMorse[cnt] = morseCode[pseudoASCII][cnt]) {
+        while (1) {
+            if (pseudoASCII > 25) {
+                cdcprintf("%02x:%02x\r\n", pseudoASCII, buffx2[cnt2]);
+                BKPT;
+            }
+            lettInMorse[cnt] = morseCode[pseudoASCII][cnt];
             if (lettInMorse[cnt] == 0) {
                 //BKPT;
                 break;
@@ -346,6 +388,7 @@ void delay_us(uint32_t us)
 // homing
 void home()
 {
+    morse("V");
      uint32_t tmp_ee_data_spsps = ee_data.spsps;
      uint32_t tmp_ee_data_spsmax = ee_data.spsmax;
      uint32_t tmp_ee_data_spsmin = ee_data.spsmin;
@@ -359,6 +402,7 @@ void home()
      }
 
      cdcprintf("THANK YOU!\r\n");
+     morse("G");
 
      delay_us(65530);
 
@@ -385,6 +429,7 @@ void home()
      ee_data.spsmin=tmp_ee_data_spsmin;
 
      semaphore &= ~(1 << IN_HOMING);
+     morse("Z");
 }
 
 // ramp up. jsmode 0 - jog, 1 - step
@@ -739,8 +784,6 @@ int main(void)
   //boot pritnf
   memset(cmd, 0, sizeof(cmd));
 
-  morse("VGZ");
-
   //
   cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n");
 
@@ -773,6 +816,8 @@ int main(void)
   // states of the outputs
   HAL_GPIO_WritePin(PULSE_GPIO_Port, PULSE_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_SET);
+
+  morse("VGZ");
 
   /* USER CODE END 2 */
 
