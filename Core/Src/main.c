@@ -235,7 +235,6 @@ uint8_t morse(const char *format, ... )
         while (lettInMorse[cnt] = morseCode[pseudoASCII][cnt]) {
             if (lettInMorse[cnt] == 0) {
                 //BKPT;
-                delay_ms(100);
                 break;
             }
             if (lettInMorse[cnt] == '.') {
@@ -246,6 +245,7 @@ uint8_t morse(const char *format, ... )
             }
             cnt++;
         }
+        delay_ms(160);
         cnt2++;
     }
     return result; //
@@ -254,17 +254,17 @@ uint8_t morse(const char *format, ... )
 void dot()
 {
     HAL_GPIO_WritePin(BUZZ_GPIO_Port, BUZZ_Pin, GPIO_PIN_RESET);
-    delay_ms(100);
+    delay_ms(80);
     HAL_GPIO_WritePin(BUZZ_GPIO_Port, BUZZ_Pin, GPIO_PIN_SET);
-    delay_ms(100);
+    delay_ms(80);
 }
 
 void dash()
 {
     HAL_GPIO_WritePin(BUZZ_GPIO_Port, BUZZ_Pin, GPIO_PIN_RESET);
-    delay_ms(250);
+    delay_ms(200);
     HAL_GPIO_WritePin(BUZZ_GPIO_Port, BUZZ_Pin, GPIO_PIN_SET);
-    delay_ms(100);
+    delay_ms(80);
 }
 
 //
