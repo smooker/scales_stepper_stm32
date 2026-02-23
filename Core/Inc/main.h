@@ -59,6 +59,11 @@ typedef enum
    RX_VAR3,      // mode for input var3
    RX_VAR4,      // mode for input var4
    RX_VAR5,      // mode for input var5
+   RX_VAR1A,
+   RX_VAR2A,
+   RX_VAR3A,
+   RX_VAR4A,
+   RX_VAR5A,
    RX_NONE,      // mode for input wtf ?
 } inputTypes;
 

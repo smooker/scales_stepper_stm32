@@ -25,6 +25,7 @@
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 #include "stdarg.h"
+#include "stdio.h"
 #include <inttypes.h>
 #include "eeprom.h"
 
@@ -60,6 +61,11 @@ typedef struct
  uint32_t spsps;
  uint32_t jogsteps;
  uint32_t ssteps;
+ uint32_t spsmax2;
+ uint32_t spsmin2;
+ uint32_t spsps2;
+ uint32_t jogsteps2;
+ uint32_t ssteps2;
 } storage_t;
 
 //
@@ -325,8 +331,13 @@ uint8_t cdcprintf(const char *format, ... )
 
     memset(buffx, 0, sizeof(buffx));
 
+    int vsprintfResult;
+
     va_start(ap, format);
-        result = vsprintf(buffx, format, ap);
+        vsprintfResult = vsprintf(buffx, format, ap);
+        if ( vsprintfResult < 0 ) {
+            BKPT;
+        }
     va_end(ap);
     uint8_t len = strlen((const char*)buffx);
 
@@ -912,6 +923,12 @@ int main(void)
                 eeread32(1, &ee_data.spsmax);
                 cdcprintf(" spsmax value : %d\r\n", ee_data.spsmax);
             }
+            if (it == RX_VAR1A) {
+                int tmpret = sscanf(cmd, "%f", (float *) &ee_data.spsmax2);
+                cdcprintf(" returned : %d\r\n", tmpret);
+                cdcprintf(" spsmax value mm: %f\r\n", 1.23f);
+            }
+
             else if (it == RX_VAR2) {
                 tmpret = sscanf(cmd, "%" SCNd32, &ee_data.spsmin);
                 cdcprintf(" spsmin value : %d\r\n", ee_data.spsmin);
@@ -972,6 +989,11 @@ int main(void)
             cdcprintf("enter value for spsmax:");
             rcs2 = RX_ECHO_ON;
             it = RX_VAR1;
+        }
+        else if (strcmp(cmd,"a1") == 0) {
+            cdcprintf("enter value for spsmax in mm/s:");
+            rcs2 = RX_ECHO_ON;
+            it = RX_VAR1A;
         }
         else if (strcmp(cmd,"b") == 0) {
             cdcprintf("enter value for spsmin:");
