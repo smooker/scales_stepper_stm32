@@ -56,16 +56,17 @@ TIM_HandleTypeDef htim3;
 //
 typedef struct
 {
- uint32_t spsmax;
- uint32_t spsmin;
- uint32_t spsps;
- uint32_t jogsteps;
- uint32_t ssteps;
- uint32_t spsmax2;
- uint32_t spsmin2;
- uint32_t spsps2;
- uint32_t jogsteps2;
- uint32_t ssteps2;
+  uint32_t spsmax;          //steps per seconds maximum
+  uint32_t spsmin;          //steps per seconds minimum
+  uint32_t spsps;           //steps per second per second
+  uint32_t jogsteps;        //jog steps
+  uint32_t ssteps;          //steps steps
+  uint32_t spmm;            //steps per mm
+  float spsmax2;            //
+  float spsmin2;
+  float spsps2;
+  float jogsteps2;
+  float ssteps2;
 } storage_t;
 
 //
@@ -75,7 +76,7 @@ typedef struct
  uint16_t msb;
 } addr32_t;
 
-storage_t ee_data;
+volatile storage_t ee_data;
 
 // define bitwises for semaphore
 #define JOGL        0
@@ -141,10 +142,10 @@ storage_t ee_data;
 #define delayafterdir   50                  //delay after set direction pin and before first pulse to come
 
 //
-int32_t abspos          = 9999;             // absolute position after homing below
+volatile int32_t abspos          = 9999;             // absolute position after homing below
 
 //
-uint8_t cmdindex        = 0;                //
+volatile uint8_t cmdindex        = 0;                //
 uint8_t cmd[16];                            //
 
 //
@@ -228,12 +229,15 @@ void readVariables();
 void TIM3Callback();
 uint32_t JogRampUp(uint8_t dir, uint32_t steps_in, uint8_t jsmod);
 uint32_t constvel(uint8_t dir, uint32_t steps_in, uint8_t jsmode);
+void volatile_memset(volatile void *s, int c, size_t n);
 
 // //
-// void printSemaphore()
-// {
-//  cdcprintf("SEM:%08x: %x\r\n", debugonly++, semaphore);
-// }
+void volatile_memset(volatile void *s, int c, size_t n) {
+    volatile unsigned char *p = (volatile unsigned char *)s;
+    while (n-- > 0) {
+        *p++ = (unsigned char)c;
+    }
+}
 
 uint8_t morse(const char *format, ... )
 {
@@ -247,7 +251,7 @@ uint8_t morse(const char *format, ... )
 
     uint8_t pseudoASCII;
 
-    memset(buffx2, 0, sizeof(buffx2));
+    volatile_memset(buffx2, 0, sizeof(buffx2));
 
     va_start(ap, format);
     result = vsprintf(buffx2, format, ap);
@@ -329,7 +333,7 @@ uint8_t cdcprintf(const char *format, ... )
 
     va_list ap;
 
-    memset(buffx, 0, sizeof(buffx));
+    volatile_memset(buffx, 0, sizeof(buffx));
 
     int vsprintfResult;
 
@@ -602,20 +606,20 @@ void CDCReceiveChar(uint8_t* inchar)
     cmd[cmdindex++] = *inchar;
 }
 
-// print in terminal of I/o states
-void dumpIO()
-{
-    cdcprintf("-------%08d-------\r\n", debugonly++);
-    cdcprintf("Dump/set of IO\r\n");
-    cdcprintf("----------------------\r\n");
-    cdcprintf("JOGL (PA6)  : %d\r\n", HAL_GPIO_ReadPin(BUTT_JOGL_GPIO_Port, BUTT_JOGL_Pin));
-    cdcprintf("JOGR (PA7)  : %d\r\n", HAL_GPIO_ReadPin(BUTT_JOGR_GPIO_Port, BUTT_JOGR_Pin));
-    cdcprintf("STEPL (PB0) : %d\r\n", HAL_GPIO_ReadPin(BUTT_STEPL_GPIO_Port, BUTT_STEPL_Pin));
-    cdcprintf("STEPR (PB1) : %d\r\n", HAL_GPIO_ReadPin(BUTT_STEPR_GPIO_Port, BUTT_STEPR_Pin));
-    cdcprintf("ESL  (PB10) : %d\r\n", HAL_GPIO_ReadPin(ES_L_GPIO_Port, ES_L_Pin));
-    cdcprintf("ESR  (PB11) : %d\r\n", HAL_GPIO_ReadPin(ES_R_GPIO_Port, ES_R_Pin));
-    cdcprintf("----------------------\r\n");
-}
+// // print in terminal of I/o states
+// void dumpIO()
+// {
+//     cdcprintf("-------%08d-------\r\n", debugonly++);
+//     cdcprintf("Dump/set of IO\r\n");
+//     cdcprintf("----------------------\r\n");
+//     cdcprintf("JOGL (PA6)  : %d\r\n", HAL_GPIO_ReadPin(BUTT_JOGL_GPIO_Port, BUTT_JOGL_Pin));
+//     cdcprintf("JOGR (PA7)  : %d\r\n", HAL_GPIO_ReadPin(BUTT_JOGR_GPIO_Port, BUTT_JOGR_Pin));
+//     cdcprintf("STEPL (PB0) : %d\r\n", HAL_GPIO_ReadPin(BUTT_STEPL_GPIO_Port, BUTT_STEPL_Pin));
+//     cdcprintf("STEPR (PB1) : %d\r\n", HAL_GPIO_ReadPin(BUTT_STEPR_GPIO_Port, BUTT_STEPR_Pin));
+//     cdcprintf("ESL  (PB10) : %d\r\n", HAL_GPIO_ReadPin(ES_L_GPIO_Port, ES_L_Pin));
+//     cdcprintf("ESR  (PB11) : %d\r\n", HAL_GPIO_ReadPin(ES_R_GPIO_Port, ES_R_Pin));
+//     cdcprintf("----------------------\r\n");
+// }
 
 // print in terminal of eeprom and program variables
 void dumpVars()
@@ -698,7 +702,7 @@ uint16_t eewrite32(uint16_t VirtAddress, uint32_t Data) {
 }
 
 // read 32 bits from eeprom
-uint16_t eeread32(uint16_t VirtAddress, uint32_t* Data) {   //smooker fixme. has to be uint32_t pointer ?!? will not work on bigger than 64kb ram size
+uint16_t eeread32(uint16_t VirtAddress, volatile uint32_t* Data) {   //smooker fixme. has to be uint32_t pointer ?!? will not work on bigger than 64kb ram size
 
     uint32_t addr32 = VirtAddress*2;
     uint16_t status = 0x99;     // 0-OK, 1-doesnotexist,0xab-no valid page, 0x99-mine ???
@@ -750,6 +754,37 @@ void readVariables()
     }
 }
 
+// zero terminated string
+void str2float(uint8_t* str)
+{
+    uint8_t flag = 0;
+    uint8_t i = 0;
+    uint32_t big;
+    uint32_t lit;
+
+
+
+    char stro[2][10];
+    volatile_memset(&stro, 0, 20);
+
+    while (i < strlen(str)) {
+        if (str[i] == '.') {
+            flag = i;
+            continue;
+        }
+        if (flag == 0) {
+            stro[0][i] = str[i];
+        }
+        if (flag > 0) {
+            stro[1][i-flag] = str[i];
+        }
+        i++;
+    }
+    big = atoi(&str[0]);
+    lit = atoi(&str[1]);
+    BKPT;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -793,7 +828,7 @@ int main(void)
   HAL_Delay(1200);      //wait for USB reenumeration
 
   //boot pritnf
-  memset(cmd, 0, sizeof(cmd));
+  volatile_memset(cmd, 0, sizeof(cmd));
 
   //
   cdcprintf("Malinovski 12.2025 (c) smooker&chichko %d \r\n");
@@ -821,7 +856,7 @@ int main(void)
   cdcprintf("Flash size=%ukiB\r\n", *(const uint16_t*)FLASHSIZE_BASE);
 
   dumpVars();
-  dumpIO();
+  // dumpIO();
 
 
   // states of the outputs
@@ -829,6 +864,9 @@ int main(void)
   HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_SET);
 
   morse("VGZ");
+  const unsigned char* str = "123.456";
+  str2float((uint8_t*)str);
+
 
   /* USER CODE END 2 */
 
@@ -836,75 +874,64 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    //migalka za watchdog/main thread
-    // HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_RESET);
-    // HAL_Delay(200);      //ms
-    // HAL_GPIO_WritePin(LED_USER_GPIO_Port, LED_USER_Pin, GPIO_PIN_SET);
-    // HAL_Delay(200);      //ms
-
     //MOVEMENT COMMANDS
 
-    // printSemaphore();
-    //JOGL - buttons to GND, limit switches too
-
     if ( SEM_JOGL ) {
-            cdcprintf("JOGL\r\n");
-            // printSemaphore();
+            // cdcprintf("JOGL\r\n");
             JogRampUp(0, 1000000, 0);
             constvel(0, 1000000, 0);
             semaphore &= ~( 1 << JOGL);
-            cdcprintf("JOGL END\r\n");
+            // cdcprintf("JOGL END\r\n");
     }
 
     //JOGR - buttons to GND, limit switches too
     if ( SEM_JOGR ) {
-            cdcprintf("JOGR\r\n");
-            // printSemaphore();
-            JogRampUp(1, 1000000, 0);
-            constvel(1, 1000000, 0);
-            semaphore &= ~( 1 << JOGR);
-            cdcprintf("JOGR END\r\n");
+        // cdcprintf("JOGR\r\n");
+        JogRampUp(1, 1000000, 0);
+        constvel(1, 1000000, 0);
+        semaphore &= ~( 1 << JOGR);
+        // cdcprintf("JOGR END\r\n");
     }
 
     if ( SEM_JOGSTEPL ) {
-        cdcprintf("JSL0\r\n");
+        // cdcprintf("JSL0\r\n");
         JogRampUp(0, ee_data.jogsteps, 0);
         semaphore &= ~( 1 << JOGSTEPL);
-        cdcprintf("JSL1\r\n");
+        // cdcprintf("JSL1\r\n");
     }
 
     if ( SEM_JOGSTEPR ) {
-        cdcprintf("JSR0\r\n");
+        // cdcprintf("JSR0\r\n");
         JogRampUp(1, ee_data.jogsteps, 0);
         semaphore &= ~( 1 << JOGSTEPR);
-        cdcprintf("JSR1\r\n");
+        // cdcprintf("JSR1\r\n");
     }
 
     if ( SEM_STEPL ) {
-        cdcprintf("STL0\r\n");
+        // cdcprintf("STL0\r\n");
         uint32_t remsteps = JogRampUp(0, ee_data.ssteps, 1);
         uint32_t remsteps4rd = remsteps;
         remsteps = ee_data.ssteps - remsteps;
         constvel(0, remsteps, 1);
 
         semaphore &= ~( 1 << STEPL);
-        cdcprintf("STL1\r\n");
+        // cdcprintf("STL1\r\n");
     }
     if ( SEM_STEPR ) {
-        cdcprintf("STR0\r\n");
+        // cdcprintf("STR0\r\n");
         uint32_t remsteps = JogRampUp(1, ee_data.ssteps, 1);
         uint32_t remsteps4rd = remsteps;
         remsteps = ee_data.ssteps - remsteps;
         constvel(1, remsteps, 1);
         semaphore &= ~( 1 << STEPR);
-        cdcprintf("STR1\r\n");
+        // cdcprintf("STR1\r\n");
     }
 
     if ( SEM_IN_HOMING ) {
-        cdcprintf("HOMING\r\n");
+        // cdcprintf("HOMING\r\n");
         home();
         semaphore &= ~( 1 << IN_HOMING);
-        cdcprintf("HOMING END\r\n");
+        // cdcprintf("HOMING END\r\n");
     }
 
 
@@ -924,9 +951,10 @@ int main(void)
                 cdcprintf(" spsmax value : %d\r\n", ee_data.spsmax);
             }
             if (it == RX_VAR1A) {
-                int tmpret = sscanf(cmd, "%f", (float *) &ee_data.spsmax2);
-                cdcprintf(" returned : %d\r\n", tmpret);
-                cdcprintf(" spsmax value mm: %f\r\n", 1.23f);
+                int tmpret = sscanf(cmd, "%f", &ee_data.spsmax2);
+                //checkme what sscanf returns
+                cdcprintf("\r\n you typed: %s\r\n returned : %d\r\n spsmax nat: %f\r\n", cmd, tmpret, ee_data.spsmax2);
+                cdcprintf("we get %08x\r\n", ee_data.spsmax2);
             }
 
             else if (it == RX_VAR2) {
@@ -970,21 +998,21 @@ int main(void)
             cdcprintf("RES:reset\r\n");
             NVIC_SystemReset();
         }
-        else if (strcmp(cmd, "home") == 0) {
-            cdcprintf("RES:dump %s\r\n", cmd);
-            home();
-        }
+        // else if (strcmp(cmd, "home") == 0) {
+        //     cdcprintf("RES:dump %s\r\n", cmd);
+        //     home();
+        // }
         else if (strcmp(cmd, "dump") == 0) {
             cdcprintf("RES:dump %s\r\n", cmd);
             dumpVars();
         }
-        else if (strcmp(cmd, "dumpio") == 0) {
-            cdcprintf("RES:dumpio %s\r\n", cmd);
-            dumpIO();
-        }
-        else if (strcmp(cmd, "help") == 0) {
-            help();
-        }
+        // else if (strcmp(cmd, "dumpio") == 0) {
+        //     cdcprintf("RES:dumpio %s\r\n", cmd);
+        //     dumpIO();
+        // }
+        // else if (strcmp(cmd, "help") == 0) {
+        //     help();
+        // }
         else if (strcmp(cmd,"a") == 0) {
             cdcprintf("enter value for spsmax:");
             rcs2 = RX_ECHO_ON;
@@ -1018,13 +1046,13 @@ int main(void)
         else {
             cdcprintf("RES: UNKNOWN COMMAND: %s\r\n", cmd);
         }
-        memset(cmd, 0, sizeof(cmd));
+        volatile_memset(cmd, 0, sizeof(cmd));
         rcs = RX_NOTCPLT;      //reset status
     } else if (rcs == RX_OF) {
         cdcprintf("\r\nRES: OVERFLOW.\r\n");    //keep it smaller
         rcs2 = RX_ECHO_OFF;
         it = RX_NONE;
-        memset(cmd, 0, sizeof(cmd));
+        volatile_memset(cmd, 0, sizeof(cmd));
     }
 
     /* USER CODE END WHILE */

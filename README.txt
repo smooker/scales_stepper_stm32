@@ -60,3 +60,35 @@ https://github.com/STMicroelectronics/STM32CubeF3/blob/master/Projects/STM32373C
 
 
 
+
+
+optimize
+smooker@sw2 ~/src/stm32/scales_stepper_stm32 $ arm-none-eabi-size ./build/scales_stepper_stm32.elf
+   text	   data	    bss	    dec	    hex	filename
+  49128	    964	   5568	  55660	   d96c	./build/scales_stepper_stm32.elf
+
+   text	   data	    bss	    dec	    hex	filename
+  56336	    964	   5568	  62868	   f594	./build/scales_stepper_stm32.elf
+
+with link.sh
+   text	   data	    bss	    dec	    hex	filename
+  49128	    964	   5568	  55660	   d96c	./build/scales_stepper_stm32.elf
+
+
+with newlib 4.6.0
+arm-none-eabi-size build/scales_stepper_stm32.elf
+   text    data     bss     dec     hex filename
+  56312    1196    5568   63076    f664 build/scales_stepper_stm32.elf
+arm-none-eabi-objcopy -O ihex build/scales_stepper_stm32.elf build/scales_stepper_stm32.hex
+
+after link.sh
+smooker@sw2 ~/src/stm32/scales_stepper_stm32 $ ./link.sh 
+   text	   data	    bss	    dec	    hex	filename
+  49104	   1196	   5568	  55868	   da3c	./build/scales_stepper_stm32.elf
+
+without enable of printf and scanf
+arm-none-eabi-size build/scales_stepper_stm32.elf
+   text	   data	    bss	    dec	    hex	filename
+  37276	    588	   5560	  43424	   a9a0	build/scales_stepper_stm32.elf
+arm-none-eabi-objcopy -O ihex build/scales_stepper_stm32.elf build/scales_stepper_stm32.hex
+

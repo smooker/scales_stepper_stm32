@@ -175,10 +175,10 @@ uint16_t EE_Init(void)
   switch (PageStatus0)
   {
     case ERASED:
-      cdcprintf("EE_Init() 0\r\n");
+      // cdcprintf("EE_Init() 0\r\n");
       if (PageStatus1 == VALID_PAGE) /* Page0 erased, Page1 valid */
       {
-        cdcprintf("EE_Init() 1\r\n");
+        // cdcprintf("EE_Init() 1\r\n");
         // BUG: Внимание! В данной говнокодной реализации EE_Init(), при каждом включении питания, впустую повторно стирается "теневая страница памяти", вырабатывая циклы перезаписи FLASH памяти (которых и так не много).
 
         /* Erase Page0 */
@@ -191,7 +191,7 @@ uint16_t EE_Init(void)
       }
       else if (PageStatus1 == RECEIVE_DATA) /* Page0 erased, Page1 receive */
       {
-        cdcprintf("EE_Init() 2\r\n");
+        // cdcprintf("EE_Init() 2\r\n");
         /* Erase Page0 */
         FlashStatus = FLASH_ErasePage(PAGE0_BASE_ADDRESS);
         /* If erase operation was failed, a Flash error code is returned */
@@ -209,7 +209,7 @@ uint16_t EE_Init(void)
       }
       else /* First EEPROM access (Page0&1 are erased) or invalid state -> format EEPROM */
       {
-        cdcprintf("EE_Init() 3\r\n");
+        // cdcprintf("EE_Init() 3\r\n");
         /* Erase both Page0 and Page1 and set Page0 as valid page */
         FlashStatus = EE_Format();
 
@@ -231,10 +231,10 @@ uint16_t EE_Init(void)
       break;
 
     case RECEIVE_DATA:
-      cdcprintf("EE_Init() 4\r\n");
+      // cdcprintf("EE_Init() 4\r\n");
       if (PageStatus1 == VALID_PAGE) /* Page0 receive, Page1 valid */
       {
-        cdcprintf("EE_Init() 5\r\n");
+        // cdcprintf("EE_Init() 5\r\n");
         /* Transfer data from Page1 to Page0 */
         for (VarIdx = EEPROM_VIRTUAL_ADDRESS_MIN; VarIdx <= EEPROM_VIRTUAL_ADDRESS_MAX; VarIdx++)
         {
@@ -276,7 +276,7 @@ uint16_t EE_Init(void)
       }
       else if (PageStatus1 == ERASED) /* Page0 receive, Page1 erased */
       {
-        cdcprintf("EE_Init() 6\r\n");
+        // cdcprintf("EE_Init() 6\r\n");
         /* Erase Page1 */
         FlashStatus = FLASH_ErasePage(PAGE1_BASE_ADDRESS);
         /* If erase operation was failed, a Flash error code is returned */
@@ -294,7 +294,7 @@ uint16_t EE_Init(void)
       }
       else /* Invalid state -> format eeprom */
       {
-        cdcprintf("EE_Init() 7\r\n");
+        // cdcprintf("EE_Init() 7\r\n");
         /* Erase both Page0 and Page1 and set Page0 as valid page */
         FlashStatus = EE_Format();
         /* If erase/program operation was failed, a Flash error code is returned */
@@ -306,10 +306,10 @@ uint16_t EE_Init(void)
       break;
 
     case VALID_PAGE:
-      cdcprintf("EE_Init() 8\r\n");
+      // cdcprintf("EE_Init() 8\r\n");
       if (PageStatus1 == VALID_PAGE) /* Invalid state -> format eeprom */
       {
-        cdcprintf("EE_Init() 9\r\n");
+        // cdcprintf("EE_Init() 9\r\n");
         /* Erase both Page0 and Page1 and set Page0 as valid page */
         FlashStatus = EE_Format();
         /* If erase/program operation was failed, a Flash error code is returned */
@@ -320,7 +320,7 @@ uint16_t EE_Init(void)
       }
       else if (PageStatus1 == ERASED) /* Page0 valid, Page1 erased */
       {
-        cdcprintf("EE_Init() 10\r\n");
+        // cdcprintf("EE_Init() 10\r\n");
         // BUG: Внимание! В данной говнокодной реализации EE_Init(), при каждом включении питания, впустую повторно стирается "теневая страница памяти", вырабатывая циклы перезаписи FLASH памяти (которых и так не много).
         
         /* Erase Page1 */
@@ -333,7 +333,7 @@ uint16_t EE_Init(void)
       }
       else /* Page0 valid, Page1 receive */
       {
-        cdcprintf("EE_Init() 11\r\n");
+        // cdcprintf("EE_Init() 11\r\n");
         /* Transfer data from Page0 to Page1 */
         for (VarIdx = EEPROM_VIRTUAL_ADDRESS_MIN; VarIdx <= EEPROM_VIRTUAL_ADDRESS_MAX; VarIdx++)
         {
@@ -376,7 +376,7 @@ uint16_t EE_Init(void)
       break;
 
     default:  /* Any other state -> format eeprom */
-      cdcprintf("EE_Init() 11\r\n");
+      // cdcprintf("EE_Init() 11\r\n");
       /* Erase both Page0 and Page1 and set Page0 as valid page */
       FlashStatus = EE_Format();
       /* If erase/program operation was failed, a Flash error code is returned */
