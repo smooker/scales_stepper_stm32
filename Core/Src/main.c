@@ -895,7 +895,7 @@ int main(void)
   HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_SET);
 
   morse("VGZ");
-  unsigned char* str = "-3.14159";
+  unsigned char* str = "-3.014159";
   tuple64 t = str2float((uint8_t*)str);
   BKPT;
 
