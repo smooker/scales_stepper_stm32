@@ -76,6 +76,12 @@ typedef struct
  uint16_t msb;
 } addr32_t;
 
+typedef struct
+{
+ int32_t big;
+ uint32_t lit;
+} tuple64;
+
 volatile storage_t ee_data;
 
 // define bitwises for semaphore
@@ -755,34 +761,59 @@ void readVariables()
 }
 
 // zero terminated string
-void str2float(uint8_t* str)
+tuple64 str2float(uint8_t* str)
 {
     uint8_t flag = 0;
     uint8_t i = 0;
-    uint32_t big;
-    uint32_t lit;
 
+	uint8_t strl;
 
+	tuple64 t;
+	t.big=999999999;
+	t.lit=999999999;
 
-    char stro[2][10];
-    volatile_memset(&stro, 0, 20);
+    char stro[2][11];
+    volatile_memset(&stro[0], 0x00, sizeof(stro[0]));
+	volatile_memset(&stro[1], 0x30, sizeof(stro[1]));
+	stro[1][9] = 0x00;
 
-    while (i < strlen(str)) {
-        if (str[i] == '.') {
+	strl = strlen(str);
+	if (strl > 19) {
+		return t;	//error 
+	}
+
+	//123456789.012345678
+    while ( i < strl ) {
+		if ( (( str[i] < '0' ) | ( str[i] > '9' )) & (( str[i] != '.' ) & ( str[i] != '-'  ))  ) {
+			t.lit = 999999990;
+			return t;
+		}
+        if ( str[i] == '.' ) {
             flag = i;
+			i++;
             continue;
         }
+		if ( ( i > 8 ) & ( flag == 0) ) {
+			t.lit = 999999991;
+			return t;
+			//break;
+		}
+		if ( ( i > 16 ) & ( flag == 1) ) {
+			t.lit = 999999992;
+			return t;
+			//break;
+		}
         if (flag == 0) {
             stro[0][i] = str[i];
         }
         if (flag > 0) {
-            stro[1][i-flag] = str[i];
+            stro[1][i-flag-1] = str[i];
         }
         i++;
     }
-    big = atoi(&str[0]);
-    lit = atoi(&str[1]);
-    BKPT;
+    t.big = atoi(stro[0]);
+    t.lit = atoi(stro[1]);
+	return t;
 }
 
 /* USER CODE END 0 */
@@ -864,9 +895,9 @@ int main(void)
   HAL_GPIO_WritePin(DIR_GPIO_Port, DIR_Pin, GPIO_PIN_SET);
 
   morse("VGZ");
-  const unsigned char* str = "123.456";
-  str2float((uint8_t*)str);
-
+  unsigned char* str = "-3.14159";
+  tuple64 t = str2float((uint8_t*)str);
+  BKPT;
 
   /* USER CODE END 2 */
 

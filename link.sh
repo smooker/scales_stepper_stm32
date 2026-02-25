@@ -1,0 +1,15 @@
+#!/bin/bash
+arm-none-eabi-gcc build/eeprom.o build/main.o build/stm32f1xx_it.o build/stm32f1xx_hal_msp.o build/stm32f1xx_hal_gpio_ex.o build/stm32f1xx_hal.o build/stm32f1xx_hal_rcc.o build/stm32f1xx_hal_rcc_ex.o build/stm32f1xx_hal_gpio.o build/stm32f1xx_hal_dma.o build/stm32f1xx_hal_cortex.o build/stm32f1xx_hal_pwr.o build/stm32f1xx_hal_flash.o build/stm32f1xx_hal_flash_ex.o build/stm32f1xx_hal_exti.o build/system_stm32f1xx.o build/sysmem.o build/syscalls.o build/stm32f1xx_hal_pcd.o build/stm32f1xx_hal_pcd_ex.o build/stm32f1xx_ll_usb.o build/usb_device.o build/usbd_desc.o build/usbd_cdc_if.o build/usbd_conf.o build/usbd_core.o build/usbd_ctlreq.o build/usbd_ioreq.o build/usbd_cdc.o build/stm32f1xx_hal_tim.o build/stm32f1xx_hal_tim_ex.o build/startup_stm32f103xb.o  -mcpu=cortex-m3 -mthumb   -specs=nano.specs -u _scanf_float -u _printf_float -Tstm32f103c8tx_flash.smooker.ld  -lc -lm -lnosys  -Wl,-Map=build/scales_stepper_stm32.map,--cref -Wl,--gc-sections -o build/scales_stepper_stm32.elf
+
+
+# bigger
+#arm-none-eabi-gcc build/eeprom.o build/main.o build/stm32f1xx_it.o build/stm32f1xx_hal_msp.o build/stm32f1xx_hal_gpio_ex.o build/stm32f1xx_hal.o build/stm32f1xx_hal_rcc.o build/stm32f1xx_hal_rcc_ex.o build/stm32f1xx_hal_gpio.o build/stm32f1xx_hal_dma.o build/stm32f1xx_hal_cortex.o build/stm32f1xx_hal_pwr.o build/stm32f1xx_hal_flash.o build/stm32f1xx_hal_flash_ex.o build/stm32f1xx_hal_exti.o build/system_stm32f1xx.o build/sysmem.o build/syscalls.o build/stm32f1xx_hal_pcd.o build/stm32f1xx_hal_pcd_ex.o build/stm32f1xx_ll_usb.o build/usb_device.o build/usbd_desc.o build/usbd_cdc_if.o build/usbd_conf.o build/usbd_core.o build/usbd_ctlreq.o build/usbd_ioreq.o build/usbd_cdc.o build/stm32f1xx_hal_tim.o build/stm32f1xx_hal_tim_ex.o build/startup_stm32f103xb.o  -mcpu=cortex-m3 -mthumb   -specs=nano.specs -u _printf_float -u _scanf_float -Tstm32f103c8tx_flash.ld  -lc -lm -lnosys  -Wl,-Map=build/scales_stepper_stm32.map,--cref -Wl,--gc-sections -o build/scales_stepper_stm32.elf
+
+#arm-none-eabi-objdump -h build/eeprom.o build/main.o build/stm32f1xx_it.o build/stm32f1xx_hal_msp.o build/stm32f1xx_hal_gpio_ex.o build/stm32f1xx_hal.o build/stm32f1xx_hal_rcc.o build/stm32f1xx_hal_rcc_ex.o build/stm32f1xx_hal_gpio.o build/stm32f1xx_hal_dma.o build/stm32f1xx_hal_cortex.o build/stm32f1xx_hal_pwr.o build/stm32f1xx_hal_flash.o build/stm32f1xx_hal_flash_ex.o build/stm32f1xx_hal_exti.o build/system_stm32f1xx.o build/sysmem.o build/syscalls.o build/stm32f1xx_hal_pcd.o build/stm32f1xx_hal_pcd_ex.o build/stm32f1xx_ll_usb.o build/usb_device.o build/usbd_desc.o build/usbd_cdc_if.o build/usbd_conf.o build/usbd_core.o build/usbd_ctlreq.o build/usbd_ioreq.o build/usbd_cdc.o build/stm32f1xx_hal_tim.o build/stm32f1xx_hal_tim_ex.o build/startup_stm32f103xb.o | grep "rodata"
+arm-none-eabi-size ./build/scales_stepper_stm32.elf
+
+
+#arm-none-eabi-objdump -j .init -D /usr/arm-none-eabi/lib/thumb/v7-m/nofp/libc_nano.a 
+
+readelf -x.rodata ./build/scales_stepper_stm32.elf
+readelf -x.comment ./build/scales_stepper_stm32.elf
